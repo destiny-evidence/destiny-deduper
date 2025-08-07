@@ -53,6 +53,8 @@ lint.ignore = [
     "E501", # long lines, remove later on.
     "FIX002", # implicit trust that TODOs are not trivial, or else they would be fixed
     "ISC001", # simplify implicit str concatenation (ruff-format recommended)
+    "TD002", # name for TO DO
+    "TD003", # pedantic issue number requester in to docs
 ]
 lint.per-file-ignores = {"tests*" = [
     "ANN001", # No return type annotation
