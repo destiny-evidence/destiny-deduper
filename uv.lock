@@ -13,16 +13,16 @@ wheels = [
 
 [[package]]
 name = "anyio"
-version = "4.9.0"
+version = "4.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "idna" },
     { name = "sniffio" },
     { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/95/7d/4c1bd541d4dffa1b52bd83fb8527089e097a106fc90b467a7313b105f840/anyio-4.9.0.tar.gz", hash = "sha256:673c0c244e15788651a4ff38710fea9675823028a6f08a5eda409e0c9840a028", size = 190949, upload-time = "2025-03-17T00:02:54.77Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f1/b4/636b3b65173d3ce9a38ef5f0522789614e590dab6a8d505340a4efe4c567/anyio-4.10.0.tar.gz", hash = "sha256:3f3fae35c96039744587aa5b8371e7e8e603c0702999535961dd336026973ba6", size = 213252, upload-time = "2025-08-04T08:54:26.451Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a1/ee/48ca1a7c89ffec8b6a0c5d02b89c305671d5ffd8d3c94acf8b8c408575bb/anyio-4.9.0-py3-none-any.whl", hash = "sha256:9f76d541cad6e36af7beb62e978876f3b41e3e04f2c1fbf0884604c0a9c4d93c", size = 100916, upload-time = "2025-03-17T00:02:52.713Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/12/e5e0282d673bb9746bacfb6e2dba8719989d3660cdb2ea79aee9a9651afb/anyio-4.10.0-py3-none-any.whl", hash = "sha256:60e474ac86736bbfd6f210f7a61218939c318f43f9972497381f1c5e930ed3d1", size = 107213, upload-time = "2025-08-04T08:54:24.882Z" },
 ]
 
 [[package]]
@@ -36,11 +36,11 @@ wheels = [
 
 [[package]]
 name = "certifi"
-version = "2025.7.14"
+version = "2025.8.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b3/76/52c535bcebe74590f296d6c77c86dabf761c41980e1347a2422e4aa2ae41/certifi-2025.7.14.tar.gz", hash = "sha256:8ea99dbdfaaf2ba2f9bac77b9249ef62ec5218e7c2b2e903378ed5fccf765995", size = 163981, upload-time = "2025-07-14T03:29:28.449Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/dc/67/960ebe6bf230a96cda2e0abcf73af550ec4f090005363542f0765df162e0/certifi-2025.8.3.tar.gz", hash = "sha256:e564105f78ded564e3ae7c923924435e1daa7463faeab5bb932bc53ffae63407", size = 162386, upload-time = "2025-08-03T03:07:47.08Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4f/52/34c6cf5bb9285074dc3531c437b3919e825d976fde097a7a73f79e726d03/certifi-2025.7.14-py3-none-any.whl", hash = "sha256:6b31f564a415d79ee77df69d757bb49a5bb53bd9f756cbbe24394ffd6fc1f4b2", size = 162722, upload-time = "2025-07-14T03:29:26.863Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/48/1549795ba7742c948d2ad169c1c8cdbae65bc450d6cd753d124b17c8cd32/certifi-2025.8.3-py3-none-any.whl", hash = "sha256:f6c12493cfb1b06ba2ff328595af9350c65d6644968e5d3a2ffd78699af217a5", size = 161216, upload-time = "2025-08-03T03:07:45.777Z" },
 ]
 
 [[package]]
@@ -151,7 +151,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "destiny-sdk", specifier = ">=0.2.0.post0" },
+    { name = "destiny-sdk", specifier = ">=0.2.2" },
     { name = "jellyfish", specifier = ">=1.2.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "pydantic", specifier = ">=2.11.7" },
@@ -172,7 +172,7 @@ dev = [
 
 [[package]]
 name = "destiny-sdk"
-version = "0.2.0.post0"
+version = "0.2.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
@@ -184,9 +184,9 @@ dependencies = [
     { name = "pytest-httpx" },
     { name = "python-jose" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f3/73/87ffcb8e60aa39cb52010a97cd8ddfbab55c80d502c1208ebd9e4d43afe7/destiny_sdk-0.2.0.post0.tar.gz", hash = "sha256:27354f6d6f0ee789a13a15f5c86a333165aceef04efee86cc50d4e5b93a2a4b1", size = 17445, upload-time = "2025-07-30T04:00:37.534Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f7/4e/6ac7575da1d92f23976c69ff5868de1477fcbe865e72824c483a6d932b59/destiny_sdk-0.2.2.tar.gz", hash = "sha256:895bbc5392cb829fa7fcf935ad796369db85f6fad4cfc2e0e0cda819adc4163b", size = 48162, upload-time = "2025-08-11T03:08:23.879Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0b/e1/8cc72fad671d78ac7fee206f9fb3aa77e4a18062b0342aa2c7ba6cacb54f/destiny_sdk-0.2.0.post0-py3-none-any.whl", hash = "sha256:619f690e29ffb114ce89bec394f7d3c67a36a263cadd46c1106affffe86af7a0", size = 21199, upload-time = "2025-07-30T04:00:36.665Z" },
+    { url = "https://files.pythonhosted.org/packages/7b/14/6a7294cee02b3dd4e6f02f4fd9bd4177278d1701e5ce224979039bcef31d/destiny_sdk-0.2.2-py3-none-any.whl", hash = "sha256:318557b0d6d5b9c617132b04eb634f5bf47bd37e1f67b88d6537e423d05a0837", size = 23136, upload-time = "2025-08-11T03:08:22.798Z" },
 ]
 
 [[package]]

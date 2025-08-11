@@ -14,7 +14,7 @@ authors = [
     "Nik Loynes <n.loynes@ucl.ac.uk>",
 ]
 dependencies = [
-    "destiny-sdk>=0.2.0.post0",
+    "destiny-sdk>=0.2.2",
     "jellyfish>=1.2.0",
     "loguru>=0.7.3",
     "pydantic-extra-types>=2.10.5",
