@@ -1,6 +1,6 @@
 # deduplication-toolkit
 
-A suite of tools for deduplicating DESTINY `Works`
+A suite of tools for deduplicating DESTINY `References`
 
 ## tl, dr
 
