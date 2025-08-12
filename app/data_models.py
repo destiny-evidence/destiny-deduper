@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, model_validator
 from pydantic_extra_types.isbn import ISBN
 
 
-class IncomingRecord(BaseModel):
+class Paper(BaseModel):
     """
     The data structure for incoming records
     for deduplication.
@@ -69,7 +69,7 @@ def get_identifier(
     return None
 
 
-def reference_to_incoming_record(ref: ReferenceFileInput | Reference) -> IncomingRecord:
+def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
     """
     Extract relevant fields for `IncomingRecord`
     from a destiny-sdk formatted `Reference` or
@@ -117,7 +117,7 @@ def reference_to_incoming_record(ref: ReferenceFileInput | Reference) -> Incomin
 
     # TODO: get pages -- where?
 
-    return IncomingRecord(
+    return Paper(
         doi=doi,
         openalex_id=openalex_id,
         pubmed_id=pubmed_id,
