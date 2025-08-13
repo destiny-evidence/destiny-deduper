@@ -18,6 +18,8 @@ from destiny_sdk.references import Reference, ReferenceFileInput
 from destiny_sdk.visibility import Visibility
 from faker import Faker
 
+from app.data_models import Paper
+
 fa = Faker()
 
 
@@ -68,7 +70,7 @@ def generate_fake_enhancements(
             )
         ]
     if "year" in bib_content:
-        content.publication_year = fa.year()
+        content.publication_year = int(fa.year())
     if "publisher" in bib_content:
         content.publisher = f"{fa.last_name_female()} Publishing House"
 
@@ -145,24 +147,215 @@ def valid_destiny_reference_file_input():
 
 @pytest.fixture
 def valid_reference_jsonl_string():
-    pass
+    return """
+    {
+    "visibility": "public",
+    "identifiers": [
+        {
+            "identifier_type": "open_alex",
+            "identifier": "W4411812659"
+        },
+        {
+            "identifier_type": "doi",
+            "identifier": "https://doi.org/10.21428/e2759450.9e968b77"
+        }
+    ],
+    "enhancements": [
+        {
+            "source": "openalex",
+            "visibility": "public",
+            "processor_version": "initial_openalex_import",
+            "enhancement_type": "bibliographic",
+            "content": {
+                "enhancement_type": "bibliographic",
+                "title": "Recurrent Neural Networks",
+                "cited_by_count": 15,
+                "created_date": "2025-07-01",
+                "publication_date": "2025-06-30",
+                "publication_year": 2025,
+                "publisher": null,
+                "authorship": [
+                    {
+                        "display_name": "James S. Magnuson",
+                        "orcid": "https://orcid.org/0000-0003-0158-2367",
+                        "position": "first"
+                    }
+                ]
+            }
+        },
+        {
+            "source": "openalex",
+            "visibility": "public",
+            "processor_version": "initial_openalex_import",
+            "enhancement_type": "location",
+            "content": {
+                "enhancement_type": "location",
+                "locations": [
+                    {
+                        "is_oa": false,
+                        "landing_page_url": "https://doi.org/10.21428/e2759450.9e968b77",
+                        "extra": {
+                            "id": "https://openalex.org/S4306463626",
+                            "display_name": "MIT Press eBooks",
+                            "issn_l": null,
+                            "issn": null,
+                            "is_oa": false,
+                            "is_in_doaj": false,
+                            "is_indexed_in_scopus": false,
+                            "is_core": false,
+                            "host_organization": null,
+                            "host_organization_name": null,
+                            "host_organization_lineage": [],
+                            "host_organization_lineage_names": [],
+                            "type": "ebook platform"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "openalex",
+            "visibility": "public",
+            "processor_version": "initial_openalex_import",
+            "enhancement_type": "annotation",
+            "content": {
+                "enhancement_type": "annotation",
+                "annotations": [
+                    {
+                        "annotation_type": "boolean",
+                        "scheme": "openalex:topic",
+                        "value": true,
+                        "label": "Neural Networks and Applications",
+                        "data": {
+                            "id": "https://openalex.org/T10320",
+                            "display_name": "Neural Networks and Applications",
+                            "score": 0.0592,
+                            "subfield": {
+                                "id": "https://openalex.org/subfields/1702",
+                                "display_name": "Artificial Intelligence"
+                            },
+                            "field": {
+                                "id": "https://openalex.org/fields/17",
+                                "display_name": "Computer Science"
+                            },
+                            "domain": {
+                                "id": "https://openalex.org/domains/3",
+                                "display_name": "Physical Sciences"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}"""
 
 
 @pytest.fixture
-def invalid_reference_jsonl_string_missing_id():
-    pass
+def invalid_reference_jsonl_string():
+    return """
+    {
+    "visibility": "public",
+    "enhancements": [
+        {
+            "source": "openalex",
+            "visiblity": "public",
+            "processor_version": "initial_openalex_import",
+            "enhancement_type": "bibliographic",
+            "content": {
+                "enhancement_type": "bibliographic",
+                "title": "Recurrent Neural Networks",
+                "cited_by_count": 15,
+                "created_date": "2025-07-01",
+                "publication_date": "2025-06-30",
+                "publication_year": 2025,
+                "publisher": null,
+                "authorship": [
+                    {
+                        "display_name": "James S. Magnuson",
+                        "orcid": "https://orcid.org/0000-0003-0158-2367",
+                        "position": "first"
+                    }
+                ]
+            }
+        },
+        {
+            "source": "openalex",
+            "visibility": "public",
+            "processor_version": "initial_openalex_import",
+            "enhancement_type": "location",
+            "content": {
+                "enhancement_type": "location",
+                "locations": [
+                    {
+                        "is_oa": false,
+                        "landing_page_url": "https://doi.org/10.21428/e2759450.9e968b77",
+                        "extra": {
+                            "id": "https://openalex.org/S4306463626",
+                            "display_name": "MIT Press eBooks",
+                            "issn_l": null,
+                            "issn": null,
+                            "is_oa": false,
+                            "is_in_doaj": false,
+                            "is_indexed_in_scopus": false,
+                            "is_core": false,
+                            "host_organization": null,
+                            "host_organization_name": null,
+                            "host_organization_lineage": [],
+                            "host_organization_lineage_names": [],
+                            "type": "ebook platform"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "source": "openalex",
+            "visibility": "public",
+            "processor_version": "initial_openalex_import",
+            "enhancement_type": "annotation",
+            "content": {
+                "enhancement_type": "annotation",
+                "annotations": [
+                    {
+                        "annotation_type": "boolean",
+                        "scheme": "openalex:topic",
+                        "value": true,
+                        "label": "Neural Networks and Applications",
+                        "data": {
+                            "id": "https://openalex.org/T10320",
+                            "display_name": "Neural Networks and Applications",
+                            "score": 0.0592,
+                            "subfield": {
+                                "id": "https://openalex.org/subfields/1702",
+                                "display_name": "Artificial Intelligence"
+                            },
+                            "field": {
+                                "id": "https://openalex.org/fields/17",
+                                "display_name": "Computer Science"
+                            },
+                            "domain": {
+                                "id": "https://openalex.org/domains/3",
+                                "display_name": "Physical Sciences"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}"""
 
 
 @pytest.fixture
-def invalid_reference_jsonl_string_missing_visibility():
-    pass
-
-
-@pytest.fixture
-def invalid_destiny_reference():
-    pass
-
-
-@pytest.fixture
-def invalid_destiny_reference_file_input():
-    pass
+def valid_paper_instance():
+    return Paper(
+        doi=DOIIdentifier(
+            identifier="10.21759465/m2z0z61", identifier_type=ExternalIdentifierType.DOI
+        ),
+        isbn=9781453886328,
+        title="Das Kapital",
+        authors=Authorship(display_name="Karl Marx", position=AuthorPosition.FIRST),
+        publisher="Createspace Independent Publishing Platform",
+        year=2011,
+    )
