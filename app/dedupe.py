@@ -305,11 +305,7 @@ class Deduper:
         not_impl = "method `compare_authors` is not yet implemented"
         raise NotImplementedError(not_impl)
 
-    def compare_title(
-        self,
-        record_a: Paper,
-        record_b: Paper,
-    ) -> float:
+    def compare_title(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
         Compare two titles.
 

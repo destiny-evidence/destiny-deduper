@@ -50,7 +50,7 @@ lint.ignore = [
     "D203", # no-blank-line-before-class
     "D205", # missing-blank-line-after-summary
     "D212", # multi-line-summary-first-line
-    "D403", # forcing upper-case - feel free to change @harry
+    "D403", # forcing upper-case
     "D407", # removed dashes lines under sections
     "D417", # argument description in docstring (unreliable)
     "E501", # long lines, remove later on.

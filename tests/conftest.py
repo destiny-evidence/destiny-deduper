@@ -9,14 +9,23 @@ from destiny_sdk.enhancements import (
     Authorship,
     BibliographicMetadataEnhancement,
     BooleanAnnotation,
+    DriverVersion,
     Enhancement,
     EnhancementFileInput,
     EnhancementType,
+    Location,
+    LocationEnhancement,
 )
-from destiny_sdk.identifiers import DOIIdentifier, ExternalIdentifierType
+from destiny_sdk.identifiers import (
+    DOIIdentifier,
+    ExternalIdentifierType,
+    OpenAlexIdentifier,
+    PubMedIdentifier,
+)
 from destiny_sdk.references import Reference, ReferenceFileInput
 from destiny_sdk.visibility import Visibility
 from faker import Faker
+from pydantic import HttpUrl
 
 from app.data_models import Paper
 
@@ -41,6 +50,64 @@ def generate_fake_annotations() -> Annotation:
         )
         for word in ["earth", "fire", "wind", "water", "heart"]
     ]
+
+
+def generate_fake_location_enhancement(
+    reference_type: Literal["file", "regular"] = "file",
+) -> EnhancementFileInput:
+    """
+    Generate an `extra` annotation.
+    This often sits in `enhancements.location` and
+    sometimes contains info such as publisher if not
+    found elsewhere.
+
+    Returns:
+        Annotation: an annotation
+
+    """
+    EnhancementDataModel = Enhancement  # noqa: N806
+    if reference_type == "file":
+        EnhancementDataModel = EnhancementFileInput  # noqa: N806
+    org = f"{fa.name} {fa.name_female}"
+    location = Location(
+        is_oa=True,
+        version=DriverVersion.PUBLISHED_VERSION,
+        landing_page_url=HttpUrl("https://ucl.ac.uk"),
+        pdf_url=None,
+        license=None,
+        extra={
+            "id": "https://openalex.org/S66408587",
+            "display_name": f"{fa.last_name} Brothers Publishing",
+            "issn_l": ["0953-4563", "1998-409X"],
+            "issn": "0953-4563",
+            "is_oa": True,
+            "is_in_doaj": False,
+            "is_indexed_in_scopus": False,
+            "is_core": False,
+            "host_organization": "https://openalex.org/P4310318547",
+            "host_organization_name": org,
+            "host_organization_lineage": [
+                "https://openalex.org/P4310318547",
+                org,
+            ],
+            "host_organization_lineage_names": [
+                f"{fa.name_female} {fa.name_male}",
+                org,
+            ],
+            "type": "journal",
+        },
+    )
+    return EnhancementDataModel(
+        reference_id=str(uuid4()),
+        source="openalex",
+        visibility=Visibility.PUBLIC,
+        enhancement_type=EnhancementType.LOCATION,
+        robot_version="initial_openalex_import",
+        content=LocationEnhancement(
+            enhancement_type=EnhancementType.LOCATION,
+            locations=[location],
+        ),
+    )
 
 
 def generate_fake_enhancements(
@@ -93,6 +160,7 @@ def generate_fake_enhancements(
             processor_version="pytest_robot",
             content=AnnotationEnhancement(annotations=generate_fake_annotations()),
         ),
+        generate_fake_location_enhancement(reference_type=reference_type),
     ]
 
 
@@ -109,7 +177,9 @@ def valid_complete_destiny_reference():
             DOIIdentifier(
                 identifier_type=ExternalIdentifierType.DOI,
                 identifier=fa.doi(),
-            )
+            ),
+            PubMedIdentifier(identifier=12345),
+            OpenAlexIdentifier(identifier="W12345678"),
         ],
         enhancements=generate_fake_enhancements(reference_type="regular"),
     )

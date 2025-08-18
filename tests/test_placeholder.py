@@ -1,5 +1,0 @@
-"""A placeholder test."""
-
-
-def test_placeholder():
-    assert True
