@@ -1,6 +1,5 @@
 """Deduplication workflow, in main class `Deduper` with various algorithms."""
 
-import inspect
 from enum import StrEnum, auto
 from typing import Literal
 
@@ -55,7 +54,7 @@ class Deduper:
         record_a: Paper,
         record_b: Paper,
         string_distance_algorithm: StringDistanceAlgorithm | None = None,
-        **kwargs,  # noqa: ANN003
+        **kwargs,
     ) -> float:
         """
         Compare two papers.
@@ -93,21 +92,26 @@ class Deduper:
                 continue
 
             # inspect method signature to filter kwargs
-            sig = inspect.signature(compare_method)
-            method_kwargs = {}
-            for name in sig.parameters:
-                if name == "self":
-                    continue
-                if name == "string_distance_algorithm":
-                    method_kwargs["string_distance_algorithm"] = (
-                        string_distance_algorithm
-                    )
-                elif name in kwargs:
-                    method_kwargs[name] = kwargs[name]
-
+            # sig = inspect.signature(compare_method)
+            # logger.debug(f"method params: {sig.parameters}")
+            # method_kwargs = {"string_distance_algorithm": string_distance_algorithm}
+            # for name in sig.parameters:
+            #     if name in ["self", "string_distance_algorithm"]:
+            #         continue
+            #     # if name == "string_distance_algorithm":
+            #     #     method_kwargs["string_distance_algorithm"] = (
+            #     #         string_distance_algorithm
+            #     #     )
+            #     if name in kwargs:
+            #         method_kwargs[name] = kwargs[name]
+            kwargs.update({"string_distance_algorithm": string_distance_algorithm})
             try:
-                score = compare_method(record_a, record_b, **method_kwargs)
-                scores["field"] = score
+                logger.debug(f"comparison_method: {compare_method}")
+                # logger.debug(f"method_kwargs: {method_kwargs}")
+                logger.debug(f"overall_kwargs: {kwargs}")
+                # score = compare_method(record_a, record_b, **method_kwargs)
+                score = compare_method(record_a, record_b, **kwargs)
+                scores[field] = score
             except NotImplementedError as e:
                 logger.error(
                     f"method {compare_method} is not yet implemented. skipping."
@@ -121,7 +125,7 @@ class Deduper:
     def compare_one_to_many(
         self,
         string_distance_algorithm: StringDistanceAlgorithm | None = None,
-        **kwargs,  # noqa: ANN003,
+        **kwargs,
     ) -> list[float]:
         """
         Compare one record to several candidates.
@@ -157,7 +161,7 @@ class Deduper:
         record_a: Paper,
         record_b: Paper,
         method: Literal["string_match", "http", "both"] = "string_match",
-        **kwargs,  # noqa: ANN003
+        **kwargs,
     ) -> float:
         """
         Compare 2 dois.
@@ -197,7 +201,7 @@ class Deduper:
         record_a: Paper,
         record_b: Paper,
         method: Literal["string_match", "http", "both"] = "string_match",
-        **kwargs,  # noqa: ANN003
+        **kwargs,
     ) -> float:
         """
         Compare two openalex ids.
@@ -210,7 +214,6 @@ class Deduper:
             record_a (Paper): a Paper instance.
             record_b (Paper): a Paper instance.
             method (Literal[&quot;string_match&quot;, &quot;http&quot;, &quot;both&quot;], optional): _description_. Defaults to "string_match".
-            string_distance_algorithm (_type_, optional): _description_. Defaults to StringDistanceAlgorithm | str | None=None.
 
         Returns:
             float: between 0 and 1.
@@ -283,7 +286,7 @@ class Deduper:
         self,
         record_a: Paper,
         record_b: Paper,
-        **kwargs,  # noqa: ANN003
+        **kwargs,
     ) -> float:
         """
         Compare two authors.
@@ -324,7 +327,7 @@ class Deduper:
         not_impl = "method `compare_title` is not yet implemented"
         raise NotImplementedError(not_impl)
 
-    def compare_year(self, record_a: Paper, record_b: Paper) -> float:
+    def compare_year(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
         Compare 2 years.
 
@@ -347,7 +350,7 @@ class Deduper:
         year_b = record_b.year
         return float(year_a == year_b)
 
-    def compare_journal(self, record_a: Paper, record_b: Paper) -> float:
+    def compare_journal(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
         Compare two journal names.
 
@@ -365,7 +368,7 @@ class Deduper:
         not_impl = "method `compare_journal` is not yet implemented"
         raise NotImplementedError(not_impl)
 
-    def compare_publisher(self, record_a: Paper, record_b: Paper) -> float:
+    def compare_publisher(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
         Compare two publishers names.
 
@@ -383,7 +386,7 @@ class Deduper:
         not_impl = "method `compare_publisher` is not yet implemented"
         raise NotImplementedError(not_impl)
 
-    def compare_pages(self, record_a: Paper, record_b: Paper) -> float:
+    def compare_pages(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
         Compare 2 sets of page delineations.
 
@@ -401,7 +404,7 @@ class Deduper:
         not_impl = "method `compare_pages` is not yet implemented"
         raise NotImplementedError(not_impl)
 
-    def compare_abstract(self, record_a: Paper, record_b: Paper) -> float:
+    def compare_abstract(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
         Compare 2 abstract strings.
 
@@ -421,7 +424,7 @@ class Deduper:
 
     @staticmethod
     def calculate_string_distance(
-        string_a: str, string_b: str, algorithm: StringDistanceAlgorithm
+        string_a: str, string_b: str, string_distance_algorithm: StringDistanceAlgorithm
     ) -> float:
         """
         Calculate string distance, genericly.
@@ -439,10 +442,12 @@ class Deduper:
             StringDistanceAlgorithm.LEVENSHTEIN: Deduper.levenshtein_distance,
         }
 
-        method = method_map.get(algorithm)
+        method = method_map.get(string_distance_algorithm)
         logger.debug(f"selected method: {method}")
         if not method:
-            no_method_for_alg_err_msg = f"No method for algorithm: {algorithm}"
+            no_method_for_alg_err_msg = (
+                f"No method for algorithm: {string_distance_algorithm}"
+            )
             raise ValueError(no_method_for_alg_err_msg)
         return method(string_a, string_b)
 
@@ -461,7 +466,7 @@ class Deduper:
             float: between 0 and 1.
 
         """
-        return jellyfish.jaro_winkler_similarity(s1=string_a, s2=string_b)
+        return jellyfish.jaro_winkler_similarity(string_a, string_b)
 
     @staticmethod
     def levenshtein_distance(string_a: str, string_b: str) -> float:
@@ -478,4 +483,4 @@ class Deduper:
             float: between 0 and 1.
 
         """
-        return jellyfish.levenshtein_distance(s1=string_a, s2=string_b)
+        return jellyfish.levenshtein_distance(string_a, string_b)

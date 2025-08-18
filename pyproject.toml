@@ -44,6 +44,7 @@ force-exclude = true
 target-version = "py312"
 lint.ignore = [
     "ANN003", # kwargs type annotation required
+    "ARG002", # kwargs unused
     "COM812", # trailing commas (ruff-format recommended)
     "D104", # module docstring
     "D203", # no-blank-line-before-class
@@ -53,6 +54,7 @@ lint.ignore = [
     "D407", # removed dashes lines under sections
     "D417", # argument description in docstring (unreliable)
     "E501", # long lines, remove later on.
+    "ERA001", # uncommented code REMOVE THIS BEFORE SUBMITTING PR!
     "FIX002", # implicit trust that TODOs are not trivial, or else they would be fixed
     "ISC001", # simplify implicit str concatenation (ruff-format recommended)
     "TD002", # name for TO DO
