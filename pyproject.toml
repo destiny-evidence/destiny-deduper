@@ -43,6 +43,7 @@ fix = true
 force-exclude = true
 target-version = "py312"
 lint.ignore = [
+    "ANN003", # kwargs type annotation required
     "COM812", # trailing commas (ruff-format recommended)
     "D104", # module docstring
     "D203", # no-blank-line-before-class
