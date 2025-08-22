@@ -1,12 +1,18 @@
 """Data models and associated methods used to specify input and output data."""
 
 import re
-from typing import Any, Self
+from typing import Self
 
-from destiny_sdk.enhancements import Authorship, EnhancementType
+from destiny_sdk.enhancements import (
+    Authorship,
+    BibliographicMetadataEnhancement,
+    EnhancementType,
+    Location,
+)
 from destiny_sdk.identifiers import (
     DOIIdentifier,
     ExternalIdentifier,
+    ExternalIdentifierType,
     OpenAlexIdentifier,
     OtherIdentifier,
     PubMedIdentifier,
@@ -63,18 +69,17 @@ class Paper(BaseModel):
 
 
 def get_identifier(
-    identifiers: list[Any], id_type: type, **kwargs: str
+    identifiers: list[ExternalIdentifier],
+    id_type: ExternalIdentifierType,
+    other_identifier_name: str | None = None,
 ) -> ExternalIdentifier | None:
     """Extract identifier from `Reference` (generic), with optional extra conditions."""
     if identifiers:
         for ident in identifiers:
-            if isinstance(ident, id_type):
+            if ident.identifier_type == id_type:
                 # special (rare) ISBN case
-                if id_type is OtherIdentifier and kwargs.get("other_identifier_name"):
-                    if (
-                        getattr(ident, "other_identifier_name", None)
-                        == kwargs["other_identifier_name"]
-                    ):
+                if isinstance(ident, OtherIdentifier) and other_identifier_name:
+                    if ident.other_identifier_name == other_identifier_name:
                         return ident
                 elif id_type is not OtherIdentifier:
                     return ident
@@ -87,69 +92,74 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
     from a destiny-sdk formatted `Reference` or
     `ReferenceFileInput` object.
     """
-    doi = get_identifier(ref.identifiers, DOIIdentifier) if ref.identifiers else None
+    doi = (
+        get_identifier(ref.identifiers, ExternalIdentifierType.DOI)
+        if ref.identifiers
+        else None
+    )
     openalex_id = (
-        get_identifier(ref.identifiers, OpenAlexIdentifier) if ref.identifiers else None
+        get_identifier(ref.identifiers, ExternalIdentifierType.OPEN_ALEX)
+        if ref.identifiers
+        else None
     )
     pubmed_id = (
-        get_identifier(ref.identifiers, PubMedIdentifier) if ref.identifiers else None
+        get_identifier(ref.identifiers, ExternalIdentifierType.PM_ID)
+        if ref.identifiers
+        else None
     )
     isbn = (
-        get_identifier(ref.identifiers, OtherIdentifier, other_identifier_name="ISBN")
+        get_identifier(
+            ref.identifiers, ExternalIdentifierType.OTHER, other_identifier_name="ISBN"
+        )
         if ref.identifiers
         else None
     )
     # get bib enhancement, for title/author/year/publisher/etc.
-    bib_enh = None
-    loc_enh = None
-    loc_enh_extra = None
+    bib_enh: BibliographicMetadataEnhancement | None = None
+    loc_enh: list[Location] | None = None
+    loc_enh_extra: dict | None = None
+    abstract: str | None = None
     if ref.enhancements:
         logger.debug(f"n enhancements: {len(ref.enhancements)}")
         for i, enh in enumerate(ref.enhancements):
             logger.debug(f"on enhancement {i}.")
             logger.debug(f"enhancement: {enh}")
-            enh_content = getattr(enh, "content", None)
-            enh_type = getattr(enh_content, "enhancement_type", None)
+            enh_content = enh.content  # type: ignore[attr-defined]
+            enh_type = enh_content.enhancement_type
             if enh_type == EnhancementType.LOCATION and enh_content:
-                loc_enh = getattr(enh_content, "locations", [])
+                loc_enh = enh_content.locations
                 continue
 
             if enh_type == EnhancementType.BIBLIOGRAPHIC:
-                bib_enh = enh_content if hasattr(enh, "content") else None
+                bib_enh = enh_content
                 continue
 
-    title = getattr(bib_enh, "title", None) if bib_enh else None
-    authors = getattr(bib_enh, "authorship", None) if bib_enh else None
-    year = getattr(bib_enh, "publication_year", None) if bib_enh else None
-    publisher = getattr(bib_enh, "publisher", None) if bib_enh else None
-    journal_bib = getattr(bib_enh, "journal", None) if bib_enh else None
+            if enh_type == EnhancementType.ABSTRACT:
+                abstract = enh_content.abstract
+                continue
+
+    title = bib_enh.title if bib_enh else None
+    authors = bib_enh.authorship if bib_enh else None
+    year = bib_enh.publication_year if bib_enh else None
+    publisher = bib_enh.publisher if bib_enh else None
+    # No DESTINY mapping currently
+    # journal_bib = bib_enh.journal if bib_enh else None
+    journal_bib = None
 
     logger.debug(loc_enh)
     logger.debug(loc_enh_extra)
 
-    loc_enh_extra = getattr(loc_enh[0], "extra", {}) if loc_enh else None
+    loc_enh_extra = loc_enh[0].extra if loc_enh else None
     journal_loc = loc_enh_extra.get("display_name", None) if loc_enh_extra else None
     issn_list = loc_enh_extra.get("issn", None) if loc_enh_extra else None
     issn = None
     if issn_list:
         issn = issn_list[0] if isinstance(issn_list, list) else issn_list
 
-    abstract = None
-    pages = None
-
     journal = journal_bib if journal_bib is not None else journal_loc
 
-    # search for abstract
-    if ref.enhancements:
-        for enh in ref.enhancements:
-            enh_content = getattr(enh, "content", None)
-            enh_type = getattr(enh_content, "enhancement_type", None)
-            if enh_type == EnhancementType.ABSTRACT:
-                if enh_content:
-                    abstract = getattr(enh_content, "abstract", None)
-                break
-
     # TODO: get pages -- where?
+    pages = None
 
     return Paper(
         doi=doi,
