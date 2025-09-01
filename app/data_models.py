@@ -131,7 +131,6 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
     year = bib_enh.publication_year if bib_enh else None
     publisher = bib_enh.publisher if bib_enh else None
     # No DESTINY mapping currently
-    # journal_bib = bib_enh.journal if bib_enh else None
     journal_bib = None
 
     logger.debug(loc_enh)

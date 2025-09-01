@@ -53,12 +53,11 @@ lint.ignore = [
     "D403", # forcing upper-case
     "D407", # removed dashes lines under sections
     "D417", # argument description in docstring (unreliable)
-    "E501", # long lines, remove later on.
-    "ERA001", # uncommented code REMOVE THIS BEFORE SUBMITTING PR!
+    "E501", # let's keep this for now (long lines)
     "FIX002", # implicit trust that TODOs are not trivial, or else they would be fixed
     "ISC001", # simplify implicit str concatenation (ruff-format recommended)
     "TD002", # name for TO DO
-    "TD003", # pedantic issue number requester in to docs
+    "TD003", # pedantic issue number requester in to dos
 ]
 lint.per-file-ignores = {"tests*" = [
     "ANN001", # No return type annotation

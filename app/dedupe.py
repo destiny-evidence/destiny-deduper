@@ -91,25 +91,10 @@ class Deduper:
                 logger.warning(f"No compare method for field: {field}")
                 continue
 
-            # inspect method signature to filter kwargs
-            # sig = inspect.signature(compare_method)
-            # logger.debug(f"method params: {sig.parameters}")
-            # method_kwargs = {"string_distance_algorithm": string_distance_algorithm}
-            # for name in sig.parameters:
-            #     if name in ["self", "string_distance_algorithm"]:
-            #         continue
-            #     # if name == "string_distance_algorithm":
-            #     #     method_kwargs["string_distance_algorithm"] = (
-            #     #         string_distance_algorithm
-            #     #     )
-            #     if name in kwargs:
-            #         method_kwargs[name] = kwargs[name]
             kwargs.update({"string_distance_algorithm": string_distance_algorithm})
             try:
                 logger.debug(f"comparison_method: {compare_method}")
-                # logger.debug(f"method_kwargs: {method_kwargs}")
                 logger.debug(f"overall_kwargs: {kwargs}")
-                # score = compare_method(record_a, record_b, **method_kwargs)
                 score = compare_method(record_a, record_b, **kwargs)
                 scores[field] = score
             except NotImplementedError as e:
