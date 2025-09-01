@@ -68,22 +68,25 @@ class Paper(BaseModel):
         raise ValueError(all_none_error)
 
 
-def get_identifier(
+def extract_identifiers(
     identifiers: list[ExternalIdentifier],
-    id_type: ExternalIdentifierType,
-    other_identifier_name: str | None = None,
-) -> ExternalIdentifier | None:
-    """Extract identifier from `Reference` (generic), with optional extra conditions."""
-    if identifiers:
-        for ident in identifiers:
-            if ident.identifier_type == id_type:
-                # special (rare) ISBN case
-                if isinstance(ident, OtherIdentifier) and other_identifier_name:
-                    if ident.other_identifier_name == other_identifier_name:
-                        return ident
-                elif id_type != ExternalIdentifierType.OTHER:
-                    return ident
-    return None
+) -> dict[ExternalIdentifierType, ExternalIdentifier]:
+    """
+    Build a mapping from identifier type to identifier object.
+    Handles the special case for OTHER/ISBN.
+    """
+    id_map = {}
+    for ident in identifiers:
+        if ident.identifier_type == ExternalIdentifierType.OTHER:
+            # isbn
+            if (
+                isinstance(ident, OtherIdentifier)
+                and getattr(ident, "other_identifier_name", None) == "ISBN"
+            ):
+                id_map[(ExternalIdentifierType.OTHER, "ISBN")] = ident
+        else:
+            id_map[ident.identifier_type] = ident
+    return id_map
 
 
 def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
@@ -92,28 +95,13 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
     from a destiny-sdk formatted `Reference` or
     `ReferenceFileInput` object.
     """
-    doi = (
-        get_identifier(ref.identifiers, ExternalIdentifierType.DOI)
-        if ref.identifiers
-        else None
-    )
-    openalex_id = (
-        get_identifier(ref.identifiers, ExternalIdentifierType.OPEN_ALEX)
-        if ref.identifiers
-        else None
-    )
-    pubmed_id = (
-        get_identifier(ref.identifiers, ExternalIdentifierType.PM_ID)
-        if ref.identifiers
-        else None
-    )
-    isbn = (
-        get_identifier(
-            ref.identifiers, ExternalIdentifierType.OTHER, other_identifier_name="ISBN"
-        )
-        if ref.identifiers
-        else None
-    )
+    id_map = extract_identifiers(ref.identifiers) if ref.identifiers else {}
+
+    doi = id_map.get(ExternalIdentifierType.DOI)
+    openalex_id = id_map.get(ExternalIdentifierType.OPEN_ALEX)
+    pubmed_id = id_map.get(ExternalIdentifierType.PM_ID)
+    isbn = id_map.get((ExternalIdentifierType.OTHER, "ISBN"))
+
     # get bib enhancement, for title/author/year/publisher/etc.
     bib_enh: BibliographicMetadataEnhancement | None = None
     loc_enh: list[Location] | None = None
