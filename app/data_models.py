@@ -81,7 +81,7 @@ def get_identifier(
                 if isinstance(ident, OtherIdentifier) and other_identifier_name:
                     if ident.other_identifier_name == other_identifier_name:
                         return ident
-                elif id_type is not OtherIdentifier:
+                elif id_type != ExternalIdentifierType.OTHER:
                     return ident
     return None
 
