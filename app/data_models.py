@@ -1,6 +1,7 @@
 """Data models and associated methods used to specify input and output data."""
 
 import re
+import math
 from typing import Self
 
 from destiny_sdk.enhancements import (
@@ -39,6 +40,8 @@ class Paper(BaseModel):
     authors: list[Authorship] | None = Field(default=None)
     year: int | None = Field(default=None)
     journal: str | None = Field(default=None)
+    issue: str | None = Field(default=None)
+    volume: str | None = Field(default=None)
     publisher: str | None = Field(default=None)
     pages: tuple[int, int] | None = Field(default=None)
     abstract: str | None = Field(default=None)
@@ -52,7 +55,34 @@ class Paper(BaseModel):
             if issn_regex.match(v):
                 return v
         return None
-
+    
+    @field_validator("pages", mode="before")
+    def parse_pages(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, tuple):
+            # already parsed
+            return v
+        if isinstance(v, str):
+            # Normalize dash variants
+            v = re.sub(r"[–—−]", "-", v.strip())
+            # Extract two numbers if possible
+            parts = v.split("-")
+            if len(parts) == 2 and all(p.strip().isdigit() for p in parts):
+                return (int(parts[0].strip()), int(parts[1].strip()))
+            # Handle cases like "685-96" → infer "685-696"
+            if len(parts) == 2 and parts[0].strip().isdigit() and parts[1].strip().isdigit() == False:
+                start = parts[0].strip()
+                end = parts[1].strip()
+                try:
+                    prefix_len = len(start) - len(end)
+                    end_full = start[:prefix_len] + end
+                    return (int(start), int(end_full))
+                except Exception:
+                    return None
+            return None  # fallback if not parseable
+        return None
+    
     @model_validator(mode="after")
     def check_for_non_missing(self) -> Self:
         """Ensure there is at least one value in instance."""
@@ -66,7 +96,7 @@ class Paper(BaseModel):
             "Please supply at least one non-None value.",
         )
         raise ValueError(all_none_error)
-
+    
 
 def extract_identifiers(
     identifiers: list[ExternalIdentifier],
