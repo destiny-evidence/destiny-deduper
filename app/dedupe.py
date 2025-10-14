@@ -201,22 +201,27 @@ class Deduper:
             return 0.0
 
         try:
-            authors_a = ", ".join([getattr(a, "author_name", "") for a in record_a.authors if getattr(a, "author_name", None)])
-            authors_b = ", ".join([getattr(a, "author_name", "") for a in record_b.authors if getattr(a, "author_name", None)])
+            authors_a = ", ".join([
+                getattr(a, "author_name", None) or getattr(a, "display_name", "")
+                for a in record_a.authors if a is not None
+            ])
+            authors_b = ", ".join([
+                getattr(a, "author_name", None) or getattr(a, "display_name", "")
+                for a in record_b.authors if a is not None
+            ])
         except AttributeError as e:
             logger.error(f"Error extracting authors: {e}")
             return 0.0
 
-        # Return 0 if either authors list is missing
+        # Return 0 if either authors list is empty
         if not authors_a or not authors_b:
             logger.warning("One or both authors lists are empty after extraction.")
             return 0.0
 
-        # Allow override algorithm via kwargs, fallback to Levenshtein
+        # Allow override algorithm via kwargs, fallback to Levenshtein/Jaro-Winkler
         algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER)
         return Deduper.calculate_string_distance(authors_a, authors_b, string_distance_algorithm=algo)
 
-    
     def compare_title(
             self, 
             record_a: Paper, 
@@ -293,23 +298,35 @@ class Deduper:
 
     def compare_pages(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
-        Compare 2 sets of page delineations (e.g., "123–7" vs "123–8"),
-        using Jaro-Winkler distance after normalization.
+        Compare 2 sets of page delineations, e.g. (123, 130) vs (123, 136),
+        or string ranges like "123-130" vs "123-136".
+        Uses Jaro-Winkler distance after normalization.
         """
-        def normalize_pages(page_range: str) -> str | None:
+
+        def normalize_pages(page_range: str | tuple[int, int] | None) -> str | None:
             if page_range is None:
                 return None
-            page_range = re.sub(r"[–—−]", "-", page_range)
-            page_range = page_range.strip()
-            parts = page_range.split("-")
-            if len(parts) != 2:
-                return page_range
-            start, end = parts[0].strip(), parts[1].strip()
-            if len(end) < len(start):
-                prefix_len = len(start) - len(end)
-                prefix = start[:prefix_len]
-                end = prefix + end
-            return f"{start}-{end}"
+
+            # If it's a tuple, convert to "start-end" string
+            if isinstance(page_range, tuple) and len(page_range) == 2:
+                return f"{page_range[0]}-{page_range[1]}"
+
+            # Otherwise assume string
+            if isinstance(page_range, str):
+                page_range = re.sub(r"[–—−]", "-", page_range)
+                page_range = page_range.strip()
+                parts = page_range.split("-")
+                if len(parts) != 2:
+                    return page_range
+                start, end = parts[0].strip(), parts[1].strip()
+                if len(end) < len(start):
+                    prefix_len = len(start) - len(end)
+                    prefix = start[:prefix_len]
+                    end = prefix + end
+                return f"{start}-{end}"
+
+            # Fallback
+            return None
 
         if not record_a.pages or not record_b.pages:
             return 0.0
@@ -319,6 +336,29 @@ class Deduper:
 
         algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER)
         return Deduper.calculate_string_distance(pages_a, pages_b, string_distance_algorithm=algo)
+
+    
+    def compare_volume(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+        """
+        Compare 2 sets of volumes,
+        using Jaro-Winkler distance.
+        """
+        if not record_a.volume or not record_b.volume:
+            return 0.0
+
+        algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER)
+        return Deduper.calculate_string_distance(record_a.volume, record_b.volume, string_distance_algorithm=algo)
+    
+    def compare_issue(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+        """
+        Compare 2 sets of volumes,
+        using Jaro-Winkler distance.
+        """
+        if not record_a.issue or not record_b.issue:
+            return 0.0
+
+        algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER)
+        return Deduper.calculate_string_distance(record_a.issue, record_b.issue, string_distance_algorithm=algo)
 
     def compare_abstract(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
@@ -384,17 +424,25 @@ class Deduper:
     @staticmethod
     def levenshtein_distance(string_a: str, string_b: str) -> float:
         """
-        Calculate Levenshtein distance b/w 2 strings.
-        Here: a wrapper around jellyfish library, but
-        we could easily implement this ourselves.
+        Calculate normalized Levenshtein similarity between two strings.
+        Returns a float between 0 (completely different) and 1 (identical).
 
         Args:
-            string_a (str): a string
-            string_b (str): a string
+            string_a (str): first string
+            string_b (str): second string
 
         Returns:
-            float: between 0 and 1.
-
+            float: similarity score between 0 and 1
         """
-        return jellyfish.levenshtein_distance(string_a, string_b)
-    
+        if not string_a or not string_b:
+            return 0.0
+
+        # lowercase and strip
+        a, b = string_a.lower().strip(), string_b.lower().strip()
+        
+        # raw edit distance
+        dist = jellyfish.levenshtein_distance(a, b)
+        
+        # normalize by max string length
+        similarity = 1 - (dist / max(len(a), len(b)))
+        return max(0.0, min(1.0, similarity))  # clamp between 0 and 1
