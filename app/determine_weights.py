@@ -1,11 +1,15 @@
+"""Determine weights for default deduplation."""
+
 import math
 import random
 import re
 from collections import defaultdict
 from itertools import combinations
+from pathlib import Path
 
-from loguru import logger
 import pandas as pd
+from loguru import logger
+from pydantic import Field, field_validator
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 from sklearn.model_selection import train_test_split
@@ -13,72 +17,216 @@ from sklearn.model_selection import train_test_split
 from app.data_models import Authorship, DOIIdentifier, Paper
 from app.dedupe import Deduper
 
+BLOCK_RULES = [
+    ["title"],
+    # ["first_author"],  # blocking on first author
+    ["abstract"],
+    ["doi"],
+    ["year", "journal"],
+    ["year", "pages"],
+    ["year", "volume"],
+    ["pages", "volume"],
+    ["pages", "issue"],
+    ["year", "issue"],
+]
 
-def parse_authors(raw_author: str | float | None) -> list[Authorship] | None:
-    """
-    Convert raw author string to list of Authorship objects.
-    Handles NaN, 'anonymous', and multiple authors separated by '.'.
-    """
-    if raw_author is None or (isinstance(raw_author, float) and math.isnan(raw_author)):
-        return None
-    if isinstance(raw_author, str):
-        if raw_author.strip().lower() in ("anonymous", ""):
-            return None
-        # Split on "." followed by letter (typical author initials)
-        author_names = re.split(r"\.(?=\w)", raw_author)
-        author_names = [a.strip() for a in author_names if a.strip()]
-        if not author_names:
-            return None
-        authors_list = []
-        for i, a in enumerate(author_names):
-            position = "first" if i == 0 else "last" if i == len(author_names)-1 else "middle"
-            authors_list.append(Authorship(author_name=a, display_name=a, position=position))
-        return authors_list
-    return None  # fallback for unexpected type
 
-# load gold standard data
-gold = pd.read_csv("app/SRSR_duplicates_labelled.csv")
-gold["author_name"] = gold["author"]
-gold["issue"] = gold["number"]
-gold["duplicateid"] = gold["duplicateid"].astype(str)
-gold_sample = gold.sort_values(by="title").head(50).copy() # use this for quick dev/testing
-
-# Inspect columns
-print(gold.head())
-
-# Extend the Paper model to include dup_id
 class ExtendedPaper(Paper):
-    dup_id: str | None = None  # Add the dup_id field
+    """An extension on the Paper class to include duplicate_id."""
 
-# Convert to ExtendedPaper format
-papers = []
-for _, row in gold_sample.iterrows(): #change to gold_sample for quick dev/testing
-    try:
-        authors_list = parse_authors(row.get("author"))
-        pages_tuple = ExtendedPaper.parse_pages(row.get("pages"))
+    id: int | None = Field(default=None)
+    duplicate_id: int | None = Field(default=None, alias="duplicateid")
 
-        doi_value = None
-        if "doi" in row and pd.notna(row["doi"]) and str(row["doi"]).strip():
-            doi_value = DOIIdentifier(identifier=str(row["doi"]).strip())
+    @field_validator("authors", mode="after")
+    @classmethod
+    def parse_authors(cls, v: str | float | None) -> list[Authorship] | None:
+        """
+        Convert raw author string to list of Authorship objects.
+        Handles NaN, 'anonymous', and multiple authors separated by '.'.
+        """
+        logger.debug("hello!")
+        if isinstance(v, list):
+            return v
 
-        paper = ExtendedPaper(
-            id=str(row["record_id"]),
-            title=row.get("title") if pd.notna(row.get("title")) else None,
-            authors=authors_list,
-            year=int(row["year"]) if pd.notna(row.get("year")) else None,
-            journal=row.get("journal") if pd.notna(row.get("journal")) else None,
-            volume=row.get("volume") if pd.notna(row.get("volume")) else None,
-            issue=row.get("issue") if pd.notna(row.get("issue")) else None,
-            pages=pages_tuple,
-            abstract=row.get("abstract") if pd.notna(row.get("abstract")) else None,
-            doi=doi_value,
-            dup_id=row.get("duplicateid")
-        )
-        papers.append(paper)
-    except Exception as e:
-        print(f"Error processing row {row['record_id']}: {e}")
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            return None
+        if isinstance(v, str):
+            if v.strip().lower() in ("anonymous", ""):
+                return None
+            # Split on "." followed by letter (typical author initials)
+            author_names = re.split(r"\.(?=\w)", v)
+            author_names = [a.strip() for a in author_names if a.strip()]
+            logger.debug(author_names)
+            if not author_names:
+                return None
+            authors_list = []
+            for i, a in enumerate(author_names):
+                position = (
+                    "first"
+                    if i == 0
+                    else "last"
+                    if i == len(author_names) - 1
+                    else "middle"
+                )
+                authors_list.append(
+                    Authorship(author_name=a, display_name=a, position=position)
+                )
+            return authors_list
+        return None  # fallback for unexpected type
 
-print(f"✅ Successfully created {len(papers)} Paper objects")
+
+def read_process_data_from_file(
+    filepath: Path,
+    cols_to_drop: list = [  # noqa: B006
+        "endnote",
+        "bond",
+        "asysd",
+        "gold",
+        "label",
+        "nbond",
+        "nendnote",
+        "nasysd",
+        "ngold",
+    ],
+) -> pd.DataFrame:
+    """Read and process our gold standard data from csv."""
+    df = pd.read_csv(filepath)
+    df.columns = [col.lower() for col in df.columns]
+    final_cols = [col for col in df.columns if col not in cols_to_drop]
+    df = df[final_cols]
+    return df.rename(columns={"number": "issue", "author": "authors"})
+
+
+# # load gold standard data
+# gold = pd.read_csv("app/SRSR_duplicates_labelled.csv")
+# gold["author_name"] = gold["author"]
+# gold["issue"] = gold["number"]
+# gold["duplicateid"] = gold["duplicateid"].astype(str)
+# gold_sample = (
+#     gold.sort_values(by="title").head(50).copy()
+# )  # use this for quick dev/testing
+
+# # Inspect columns
+# print(gold.head())
+
+
+def get_first_author(authors: list[Authorship] | None) -> str | None:
+    """Get first author from a parsed authorship list."""
+    if authors is None:
+        return None
+    for author in authors:
+        if author.position.value == "first":
+            return author.display_name
+    return None
+
+
+def get_gold_standard_dupes(
+    df: pd.DataFrame, column: str = "duplicateid", sample: int | None = None
+) -> tuple[int, int]:
+    """Get rows from gold standard df which are duplicates."""
+    positives = []
+    grouped = df[df[column].notna()].groupby(column)
+    for dup_id, grp in grouped:
+        ids = grp["id"].tolist()
+        for a, b in combinations(ids, 2):
+            positives.append((a, b))
+
+    if sample:
+        positives = random.sample(positives, k=sample)
+
+    return positives
+
+
+def get_gold_standard_close_non_dupes(
+    df: pd.DataFrame,
+    column: str = "duplicateid",
+    sample: int | None = None,
+    block_rules: list = BLOCK_RULES,
+) -> tuple[int, int]:
+    """Get rows from gold standard df which are not duplicates, but look like duplicates."""
+
+    def _norm(val: str):
+        """Normalise string."""
+        if not val:
+            return None
+        s = str(val).strip().lower()
+        s = re.sub(r"\s+", " ", s)
+        return s
+
+    negatives = []
+    seen_pairs = set()
+    print("[debug] Hard negative generation per block rule:")
+
+    pubs_dict = df.to_dict(orient="records")
+
+    for rule in block_rules:
+        # what we need here:
+        # - normalise/concatenate the stuff
+        # - save id for the record, as well duplication id
+        # - go through every item of normalised stuff, try to find
+        #   a exact match
+        # - if it's an exact match, we can discard if it is a real duplicate (duplicate_id_a == duplicate_id_b)
+        # - keep all of the remaining ones, that's our negative pairs.
+        # - label non-dupes -> 0; true dupes -> 1
+        # should be able to run the classifier then.
+        if len(rule) == 1:
+            normalised = df[rule[0]].apply(_norm)
+            normalised_df = pd.concat([df[["id", "duplicateid"]], normalised], axis=0)
+
+        elif len(rule) > 1:
+            normalised = ["" for x in range(len(df))]
+            for sub_rule in rule:
+                for i, val in enumerate(df[sub_rule]):
+                    normalised[i] += _norm(val)
+            normalised_df = pd.concat(
+                [df[["id", "duplicateid"]], pd.DataFrame(normalised)], axis=0
+            )
+
+        # group by
+        grouped = normalised_df.groupby()
+
+    # pairs = {}
+    # for rule in block_rules:
+    #     if len(rule) == 1:
+    #         vals = [_norm(val) for val in df[rule]]
+    #     elif len(rule) > 1:
+    #         vals = ["" for x in range(len(df))]
+    #         for sub_rule in rule:
+    #             for i, val in enumerate(df[sub_rule]):
+    #                 vals[i] += _norm(val)
+
+    #     pairs[", ".join(rule)] = vals
+
+    total_candidate_pairs = 0
+    valid_hard_negatives = 0
+
+    for key, ids in blocks.items():
+        if len(ids) < 2:
+            continue
+        for a, b in combinations(ids, 2):
+            total_candidate_pairs += 1
+            pair_id = tuple(sorted((a, b)))
+            da = enriched[a]["dup_id"]
+            db = enriched[b]["dup_id"]
+            if da != db:
+                valid_hard_negatives += 1
+                if pair_id not in seen_pairs:
+                    negatives.append((a, b, 0))
+                    seen_pairs.add(pair_id)
+
+    print(
+        f"[debug] Rule {tuple(rule)}: "
+        f"candidate pairs={total_candidate_pairs}, "
+        f"valid hard negatives={valid_hard_negatives}"
+    )
+
+    print(f"[debug] Total hard negatives generated: {len(negatives)}")
+
+    return negatives
+
+
+def run_deduper_on_training_set():
+    pass
 
 
 def build_training_pairs_with_scores(
@@ -90,100 +238,8 @@ def build_training_pairs_with_scores(
     Includes hard negatives via blocking (year+journal, etc.).
     Computes per-field similarity scores using Deduper.
     """
-    logger.debug(f"Received {len(papers)} papers")
-
-    # --- Utility: flatten authors and get first author ---
-    def get_authors_info(paper):
-        authors_list = getattr(paper, "authors", None)
-        if not isinstance(authors_list, list) or len(authors_list) == 0:
-            return "", None
-
-        authors_flat = ", ".join(
-            getattr(a, "display_name", getattr(a, "author_name", str(a)))
-            for a in authors_list if a is not None
-        )
-
-        # Get first author by position, fallback to first in list
-        first_author_obj = next(
-            (a for a in authors_list if getattr(a, "position", "").lower() == "first"),
-            authors_list[0]
-        )
-        first_author = getattr(first_author_obj, "display_name",
-                               getattr(first_author_obj, "author_name",
-                                       str(first_author_obj)))
-        return authors_flat, first_author
-
-    # --- Step 1: convert to simple metadata table ---
-    df_meta = pd.DataFrame([
-        {
-            "id": str(getattr(p, "id", getattr(p, "record_id", id(p)))),
-            "dup_id": getattr(p, "dup_id", None),
-            "title": getattr(p, "title", None),
-            "authors": get_authors_info(p)[0],
-            "first_author": get_authors_info(p)[1],
-            "year": getattr(p, "year", None),
-            "journal": getattr(p, "journal", None),
-        }
-        for p in papers
-    ])
-
-    papers_by_id = {id_: p for id_, p in zip(df_meta["id"], papers)}
-
-    # --- Step 2: Positive pairs (same dup_id) ---
-    positives = []
-    grouped = df_meta[df_meta["dup_id"].notnull()].groupby("dup_id")
-    for dup_id, grp in grouped:
-        ids = grp["id"].tolist()
-        for a, b in combinations(ids, 2):
-            positives.append((a, b, 1))
-    print(f"[debug] positives generated: {len(positives)}")
 
     # --- Step 3: Hard negatives using blocking rules ---
-    enriched = {}
-    for p in papers:
-        pid = str(getattr(p, "id", getattr(p, "record_id", id(p))))
-        authors_flat, first_author = get_authors_info(p)
-
-        doi_obj = getattr(p, "doi", None)
-        doi_str = getattr(doi_obj, "identifier", None) if doi_obj and not isinstance(doi_obj, str) else doi_obj
-
-        enriched[pid] = {
-            "id": pid,
-            "dup_id": getattr(p, "dup_id", None),
-            "title": getattr(p, "title", None),
-            "first_author": first_author,   # for blocking
-            "authors": authors_flat,        # full string for Deduper
-            "year": getattr(p, "year", None),
-            "journal": getattr(p, "journal", None),
-            "pages": getattr(p, "pages", None),
-            "volume": getattr(p, "volume", None),
-            "issue": getattr(p, "issue", None),
-            "isbn": getattr(p, "isbn", None),
-            "doi": doi_str.lower().strip() if doi_str else None,
-            "abstract": getattr(p, "abstract", None),
-        }
-
-    def _norm(val):
-        if not val:
-            return None
-        s = str(val).strip().lower()
-        s = re.sub(r"\s+", " ", s)
-        return s
-
-    block_rules = [
-        ["title"],
-        ["first_author"],  # blocking on first author
-        ["abstract"],
-        ["doi"],
-        ["year", "journal"],
-        ["year", "pages"],
-        ["year", "volume"],
-        ["pages", "volume"],
-        ["pages", "issue"],
-        ["year", "issue"],
-    ]
-
-    print(f"[debug] prepping to generate hard negatives using {len(block_rules)} blocking rules...")
 
     negatives = []
     seen_pairs = set()
@@ -215,9 +271,11 @@ def build_training_pairs_with_scores(
                         negatives.append((a, b, 0))
                         seen_pairs.add(pair_id)
 
-        print(f"[debug] Rule {tuple(rule)}: "
-              f"candidate pairs={total_candidate_pairs}, "
-              f"valid hard negatives={valid_hard_negatives}")
+        print(
+            f"[debug] Rule {tuple(rule)}: "
+            f"candidate pairs={total_candidate_pairs}, "
+            f"valid hard negatives={valid_hard_negatives}"
+        )
 
     print(f"[debug] Total hard negatives generated: {len(negatives)}")
 
@@ -240,7 +298,17 @@ def build_training_pairs_with_scores(
         deduper = Deduper(reference=rec_a, candidates=[rec_b])
 
         scores = {}
-        for field in ["doi", "title", "authors", "year", "journal", "pages", "abstract", "volume", "issue"]:
+        for field in [
+            "doi",
+            "title",
+            "authors",
+            "year",
+            "journal",
+            "pages",
+            "abstract",
+            "volume",
+            "issue",
+        ]:
             compare_func = getattr(deduper, f"compare_{field}", None)
             if compare_func:
                 try:
@@ -251,72 +319,97 @@ def build_training_pairs_with_scores(
             else:
                 scores[field] = None
 
-        results.append({
-            "id_1": a,
-            "id_2": b,
-            "label": label,
-            **scores,
-        })
+        results.append(
+            {
+                "id_1": a,
+                "id_2": b,
+                "label": label,
+                **scores,
+            }
+        )
 
         if idx % 200 == 0:
             print(f"[debug] processed {idx}/{len(all_pairs)} pairs")
 
     df = pd.DataFrame(results)
     print(f"[debug] final dataframe shape: {df.shape}")
-    print(f"[debug] label distribution: {df['label'].value_counts().to_dict() if not df.empty else 'empty'}")
+    print(
+        f"[debug] label distribution: {df['label'].value_counts().to_dict() if not df.empty else 'empty'}"
+    )
     return df
 
-def train_dedup_model(df_training: pd.DataFrame):
-    feature_cols = ["doi", "title", "authors", "year", "journal", "pages", "abstract", "volume", "issue"]
-    X = df_training[feature_cols].fillna(0)
-    y = df_training["label"]
 
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
-    )
+# def train_dedup_model(df_training: pd.DataFrame):
+#     feature_cols = [
+#         "doi",
+#         "title",
+#         "authors",
+#         "year",
+#         "journal",
+#         "pages",
+#         "abstract",
+#         "volume",
+#         "issue",
+#     ]
+#     X = df_training[feature_cols].fillna(0)
+#     y = df_training["label"]
 
-    clf = RandomForestClassifier(
-        n_estimators=200,
-        max_depth=None,
-        random_state=42,
-        class_weight="balanced"
-    )
-    clf.fit(X_train, y_train)
+#     X_train, X_val, y_train, y_val = train_test_split(
+#         X, y, test_size=0.2, random_state=42, stratify=y
+#     )
 
-    y_pred = clf.predict(X_val)
-    y_prob = clf.predict_proba(X_val)[:, 1]
+#     clf = RandomForestClassifier(
+#         n_estimators=200, max_depth=None, random_state=42, class_weight="balanced"
+#     )
+#     clf.fit(X_train, y_train)
 
-    print("[info] Validation metrics:")
-    print(classification_report(y_val, y_pred))
-    print("Confusion Matrix:\n", confusion_matrix(y_val, y_pred))
-    print("ROC-AUC:", roc_auc_score(y_val, y_prob))
+#     y_pred = clf.predict(X_val)
+#     y_prob = clf.predict_proba(X_val)[:, 1]
 
-    # Feature importance
-    feat_imp = pd.DataFrame({
-        "feature": feature_cols,
-        "importance": clf.feature_importances_
-    }).sort_values("importance", ascending=False)
-    print("[info] Feature importance:\n", feat_imp)
+#     print("[info] Validation metrics:")
+#     print(classification_report(y_val, y_pred))
+#     print("Confusion Matrix:\n", confusion_matrix(y_val, y_pred))
+#     print("ROC-AUC:", roc_auc_score(y_val, y_prob))
 
-    return clf
+#     # Feature importance
+#     feat_imp = pd.DataFrame(
+#         {"feature": feature_cols, "importance": clf.feature_importances_}
+#     ).sort_values("importance", ascending=False)
+#     print("[info] Feature importance:\n", feat_imp)
 
-# === 3. Predict duplicates for new candidate pairs ===
-def predict_duplicate_probability(paper_a: Paper, paper_b: Paper, model, feature_cols=None):
-    if feature_cols is None:
-        feature_cols = ["doi", "title", "authors", "year", "journal", "pages", "abstract", "volume", "issue"]
-    deduper = Deduper(reference=paper_a, candidates=[paper_b])
-    features = []
-    for field in feature_cols:
-        try:
-            features.append(getattr(deduper, f"compare_{field}")(paper_a, paper_b))
-        except:
-            features.append(0.0)
-    prob = model.predict_proba([features])[0, 1]
-    return prob
+#     return clf
 
-# === Example usage ===
-df_training = build_training_pairs_with_scores(papers, negative_ratio=2.0)
-dedup_model = train_dedup_model(df_training)
 
-# Predict on new pair
-# prob = predict_duplicate_probability(paper1, paper2, model=dedup_model)  
+# # === 3. Predict duplicates for new candidate pairs ===
+# def predict_duplicate_probability(
+#     paper_a: Paper, paper_b: Paper, model, feature_cols=None
+# ):
+#     if feature_cols is None:
+#         feature_cols = [
+#             "doi",
+#             "title",
+#             "authors",
+#             "year",
+#             "journal",
+#             "pages",
+#             "abstract",
+#             "volume",
+#             "issue",
+#         ]
+#     deduper = Deduper(reference=paper_a, candidates=[paper_b])
+#     features = []
+#     for field in feature_cols:
+#         try:
+#             features.append(getattr(deduper, f"compare_{field}")(paper_a, paper_b))
+#         except:
+#             features.append(0.0)
+#     prob = model.predict_proba([features])[0, 1]
+#     return prob
+
+
+# # === Example usage ===
+# df_training = build_training_pairs_with_scores(papers, negative_ratio=2.0)
+# dedup_model = train_dedup_model(df_training)
+
+# # Predict on new pair
+# # prob = predict_duplicate_probability(paper1, paper2, model=dedup_model)

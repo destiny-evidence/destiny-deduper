@@ -23,6 +23,9 @@ from loguru import logger
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_extra_types.isbn import ISBN
 
+PAGES_PARTS = 2
+ISBN_LEN = 10
+
 
 class Paper(BaseModel):
     """
@@ -31,13 +34,13 @@ class Paper(BaseModel):
 
     """
 
-    doi: DOIIdentifier | None = Field(default=None)
+    doi: DOIIdentifier | str | None = Field(default=None)
     openalex_id: OpenAlexIdentifier | None = Field(default=None)
     pubmed_id: PubMedIdentifier | None = Field(default=None)
-    isbn: ISBN | None = Field(default=None)
+    isbn: ISBN | str | None = Field(default=None)
     issn: str | None = Field(default=None)
     title: str | None = Field(default=None)
-    authors: list[Authorship] | None = Field(default=None)
+    authors: list[Authorship] | str | None = Field(default=None)
     year: int | None = Field(default=None)
     journal: str | None = Field(default=None)
     issue: str | None = Field(default=None)
@@ -46,8 +49,8 @@ class Paper(BaseModel):
     pages: tuple[int, int] | str | None = Field(default=None)
     abstract: str | None = Field(default=None)
 
+    @field_validator("issn", mode="after")
     @classmethod
-    @field_validator("issn", mode="before")
     def check_valid_issn(cls, v: str | None) -> str | None:
         """Ensure issn (if present) is valid."""
         if v:
@@ -56,39 +59,109 @@ class Paper(BaseModel):
                 return v
         return None
 
-    @field_validator("pages", mode="before")
-    def parse_pages(cls, v):
+    @field_validator("doi", mode="after")
+    @classmethod
+    def format_doi(cls, v: str | DOIIdentifier | None) -> DOIIdentifier | None:
+        """Make a doi string work with destiny DOIIdentifier."""
+        if v is None:
+            return None
+        if isinstance(v, DOIIdentifier):
+            return v
+        if isinstance(v, str):
+            return DOIIdentifier(identifier=v)
+        return None
+
+    @field_validator("isbn", mode="after")
+    @classmethod
+    def format_isbn(cls, v: ISBN | str | None) -> ISBN | None:
+        """Normalize ISBN: keep digits, left-pad with zeros to length ISBN_LEN, return ISBN or None."""
+        if v is None:
+            return None
+        if isinstance(v, ISBN):
+            return v
+        if isinstance(v, str):
+            # extract digits only
+            digits = "".join(re.findall(r"\d+", v))
+            if not digits:
+                return None
+            # left-pad until required length
+            if len(digits) < ISBN_LEN:
+                digits = digits.zfill(ISBN_LEN)
+            return ISBN(digits)
+        return None
+
+    # @classmethod
+    # @field_validator("pages", mode="before")
+    # def parse_pages(cls, v: str | tuple[int, int] | None) -> tuple[int, int] | None:
+    #     """Parse pages to tuple(int, int)."""
+    #     if isinstance(v, str):
+    #         # Normalize dash variants
+    #         v = re.sub(r"[–—−]", "-", v.strip())  # noqa: RUF001
+    #         # Extract two numbers if possible
+    #         parts = v.split("-")
+    #         if len(parts) == PAGES_PARTS and all(p.strip().isdigit() for p in parts):
+    #             return (int(parts[0].strip()), int(parts[1].strip()))
+    #         # Handle cases like "685-96" → infer "685-696"
+    #         if (
+    #             len(parts) == PAGES_PARTS
+    #             and parts[0].strip().isdigit()
+    #             and not parts[1].strip().isdigit()
+    #         ):
+    #             start = parts[0].strip()
+    #             end = parts[1].strip()
+    #             try:
+    #                 prefix_len = len(start) - len(end)
+    #                 end_full = start[:prefix_len] + end
+    #                 return (int(start), int(end_full))
+    #             except (ValueError, TypeError):
+    #                 return None
+    #         else:
+    #             return None
+    #     return v
+
+    @field_validator("pages", mode="after")
+    @classmethod
+    def parse_pages(cls, v: str | tuple[int, int] | None) -> tuple[int, int] | None:  # noqa: PLR0911
+        """Parse pages to tuple(int, int). Handles '685-96', '70s-85s', and other common forms."""
         if v is None:
             return None
         if isinstance(v, tuple):
-            # already parsed
             return v
         if isinstance(v, str):
-            # Normalize dash variants
-            v = re.sub(r"[–—−]", "-", v.strip())
-            # Extract two numbers if possible
-            parts = v.split("-")
-            if len(parts) == 2 and all(p.strip().isdigit() for p in parts):
-                return (int(parts[0].strip()), int(parts[1].strip()))
-            # Handle cases like "685-96" → infer "685-696"
-            if len(parts) == 2 and parts[0].strip().isdigit() and parts[1].strip().isdigit() == False:
-                start = parts[0].strip()
-                end = parts[1].strip()
-                try:
-                    prefix_len = len(start) - len(end)
-                    end_full = start[:prefix_len] + end
-                    return (int(start), int(end_full))
-                except (ValueError, TypeError) as e:
-                    return None
-            return None  # fallback if not parseable
+            s = re.sub(r"[–—−]", "-", v.strip())  # normalize dashes
+            parts = [p.strip() for p in s.split("-") if p.strip()]
+            if len(parts) != 2:
+                return None
+
+            def extract_number(token: str) -> str | None:
+                # grab the longest contiguous digits substring (e.g. "70s" -> "70", "685" -> "685")
+                m = re.search(r"(\d+)", token)
+                return m.group(1) if m else None
+
+            start_s = extract_number(parts[0])
+            end_s = extract_number(parts[1])
+
+            if not start_s or not end_s:
+                return None
+
+            # If end looks shorter than start, try to expand (685-96 -> 685-696)
+            try:
+                if len(end_s) < len(start_s):
+                    prefix_len = len(start_s) - len(end_s)
+                    end_full = start_s[:prefix_len] + end_s
+                else:
+                    end_full = end_s
+                start_n = int(start_s)
+                end_n = int(end_full)
+                return (start_n, end_n)
+            except (ValueError, TypeError):
+                return None
         return None
 
     @model_validator(mode="after")
     def check_for_non_missing(self) -> Self:
         """Ensure there is at least one value in instance."""
-        logger.debug(f"model validator, data: {self.model_dump()}")
         for v in self.model_dump().values():
-            logger.debug(f"value v: {v}")
             if v is not None:
                 return self
         all_none_error = (

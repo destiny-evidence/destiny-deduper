@@ -33,7 +33,7 @@ from app.data_models import Paper
 fa = Faker()
 
 
-def generate_fake_annotations() -> Annotation:
+def generate_fake_annotations() -> list[Annotation]:
     """
     Generate synthetic annotations data for reference.
 
