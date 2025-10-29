@@ -1,14 +1,18 @@
-import pandas as pd
+import math
 import random
-from itertools import combinations
-from collections import defaultdict
-from typing import List
-from app.dedupe import Deduper
-from app.data_models import Paper, Authorship, DOIIdentifier
 import re
-from sklearn.model_selection import train_test_split
+from collections import defaultdict
+from itertools import combinations
+
+from loguru import logger
+import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
+from sklearn.model_selection import train_test_split
+
+from app.data_models import Authorship, DOIIdentifier, Paper
+from app.dedupe import Deduper
+
 
 def parse_authors(raw_author: str | float | None) -> list[Authorship] | None:
     """
@@ -36,8 +40,8 @@ def parse_authors(raw_author: str | float | None) -> list[Authorship] | None:
 gold = pd.read_csv("app/SRSR_duplicates_labelled.csv")
 gold["author_name"] = gold["author"]
 gold["issue"] = gold["number"]
-gold['duplicateid'] = gold['duplicateid'].astype(str)
-gold_sample = gold.sort_values(by="title").head(500).copy() # use this for quick dev/testing
+gold["duplicateid"] = gold["duplicateid"].astype(str)
+gold_sample = gold.sort_values(by="title").head(50).copy() # use this for quick dev/testing
 
 # Inspect columns
 print(gold.head())
@@ -48,7 +52,7 @@ class ExtendedPaper(Paper):
 
 # Convert to ExtendedPaper format
 papers = []
-for _, row in gold.iterrows(): #change to gold_sample for quick dev/testing
+for _, row in gold_sample.iterrows(): #change to gold_sample for quick dev/testing
     try:
         authors_list = parse_authors(row.get("author"))
         pages_tuple = ExtendedPaper.parse_pages(row.get("pages"))
@@ -86,8 +90,7 @@ def build_training_pairs_with_scores(
     Includes hard negatives via blocking (year+journal, etc.).
     Computes per-field similarity scores using Deduper.
     """
-
-    print(f"[debug] received {len(papers)} papers")
+    logger.debug(f"Received {len(papers)} papers")
 
     # --- Utility: flatten authors and get first author ---
     def get_authors_info(paper):
@@ -289,7 +292,6 @@ def train_dedup_model(df_training: pd.DataFrame):
     print("ROC-AUC:", roc_auc_score(y_val, y_prob))
 
     # Feature importance
-    import pandas as pd
     feat_imp = pd.DataFrame({
         "feature": feature_cols,
         "importance": clf.feature_importances_
@@ -317,4 +319,4 @@ df_training = build_training_pairs_with_scores(papers, negative_ratio=2.0)
 dedup_model = train_dedup_model(df_training)
 
 # Predict on new pair
-# prob = predict_duplicate_probability(paper1, paper2, model=dedup_model)
+# prob = predict_duplicate_probability(paper1, paper2, model=dedup_model)  

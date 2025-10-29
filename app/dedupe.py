@@ -1,9 +1,8 @@
 """Deduplication workflow, in main class `Deduper` with various algorithms."""
 
+import re
 from enum import StrEnum, auto
 from typing import Literal
-
-import re
 
 import jellyfish
 from loguru import logger
@@ -143,7 +142,11 @@ class Deduper:
 
         return dupe_probabilities
 
-    def compare_doi(self, record_a: "Paper", record_b: "Paper", **kwargs) -> float:
+    def compare_doi(self, 
+                    record_a: Paper,
+                    record_b: Paper,
+                    **kwargs
+    ) -> float:
         """
         Compare DOIs between two records (exact match after normalization).
 
@@ -154,21 +157,89 @@ class Deduper:
         def normalize_doi(doi: str) -> str:
             """Normalize DOI format to consistent lowercase, remove prefixes, decode symbols."""
             if not doi:
-                return ""
+                return None
             doi = doi.replace("%28", "(").replace("%29", ")")
             doi = re.sub(r"^(https?://)?(dx\.)?doi\.org/", "", doi, flags=re.IGNORECASE)
             doi = re.sub(r"^DOI[: ]?", "", doi, flags=re.IGNORECASE)
             match = re.search(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", doi, flags=re.IGNORECASE)
-            if match:
-                doi = match.group(0)
-            return doi.strip().lower()
+            if not match:
+                return None
+            return match.group(0).strip().lower()
 
         doi_a = normalize_doi(getattr(record_a.doi, "identifier", None))
         doi_b = normalize_doi(getattr(record_b.doi, "identifier", None))
 
         if not doi_a or not doi_b:
-            return 0.0
+            return 0
         return 1.0 if doi_a == doi_b else 0.0
+
+    def compare_openalex_id(
+        self,
+        record_a: Paper,
+        record_b: Paper,
+        method: Literal["string_match", "http", "both"] = "string_match",
+        **kwargs,
+    ) -> float:
+        """
+        Compare two openalex ids.
+
+        NOTE: `http` might be a method where we follow the url (requests?) for
+        doi_a and doi_b and check if they're the same (maybe string distance on
+        the resulting html?).
+
+        Args:
+            record_a (Paper): a Paper instance.
+            record_b (Paper): a Paper instance.
+            method (Literal[&quot;string_match&quot;, &quot;http&quot;, &quot;both&quot;], optional): _description_. Defaults to "string_match".
+
+        Returns:
+            float: between 0 and 1.
+
+        """
+        if record_a.openalex_id is None or record_b.openalex_id is None:
+            return 0.0
+
+        openalex_id_a_str = (
+            record_a.openalex_id.identifier
+        )  # should have openalex url removed
+        openalex_id_b_str = record_b.openalex_id.identifier
+
+        if method == "string_match":
+            # NOTE - does this even make sense? i think this is what @kaitlynhair code is doing
+            # but does approximate string similarity imply similarity of the
+            # underlying record, or should we just do a == b comparison?
+            return Deduper.calculate_string_distance(
+                openalex_id_a_str, openalex_id_b_str, **kwargs
+            )
+
+        not_implemented_err_msg = f"method {method} is not yet implemented."
+        raise NotImplementedError(not_implemented_err_msg)
+
+    def compare_pubmed_id(
+        self,
+        record_a: Paper,
+        record_b: Paper,
+    ) -> float:
+        """
+        Compare two pubmed ids.
+
+        Args:
+            record_a (Paper): a Paper instance.
+            record_b (Paper): a Paper instance.
+            string_distance_algorithm (_type_, optional): _description_. Defaults to StringDistanceAlgorithm | str | None=None.
+
+        Returns:
+            float: _description_
+
+        """
+        if record_a.pubmed_id is None or record_b.pubmed_id is None:
+            return 0.0
+
+        pubmed_id_a_str = record_a.pubmed_id.identifier
+        pubmed_id_b_str = record_b.pubmed_id.identifier
+
+        return float(pubmed_id_a_str == pubmed_id_b_str)
+
 
     def compare_isbn(self, record_a: "Paper", record_b: "Paper", **kwargs) -> float:
         """
@@ -178,9 +249,7 @@ class Deduper:
             float: 1.0 if equal, 0.0 otherwise.
         """
         def normalize_isbn(isbn: str) -> str:
-            """
-            Normalize ISBN string by removing common extra patterns.
-            """
+            """Normalize ISBN string by removing common extra patterns."""
             if not isbn:
                 return ""
             isbn = re.sub(r"\s*\(PRINT\).*", "", isbn, flags=re.IGNORECASE)
@@ -337,7 +406,7 @@ class Deduper:
         algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER)
         return Deduper.calculate_string_distance(pages_a, pages_b, string_distance_algorithm=algo)
 
-    
+
     def compare_volume(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
         Compare 2 sets of volumes,
@@ -348,7 +417,7 @@ class Deduper:
 
         algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER)
         return Deduper.calculate_string_distance(record_a.volume, record_b.volume, string_distance_algorithm=algo)
-    
+
     def compare_issue(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
         Compare 2 sets of volumes,
@@ -439,10 +508,10 @@ class Deduper:
 
         # lowercase and strip
         a, b = string_a.lower().strip(), string_b.lower().strip()
-        
+
         # raw edit distance
         dist = jellyfish.levenshtein_distance(a, b)
-        
+
         # normalize by max string length
         similarity = 1 - (dist / max(len(a), len(b)))
         return max(0.0, min(1.0, similarity))  # clamp between 0 and 1

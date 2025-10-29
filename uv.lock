@@ -134,9 +134,12 @@ dependencies = [
     { name = "faker" },
     { name = "jellyfish" },
     { name = "loguru" },
+    { name = "mypy" },
+    { name = "pre-commit" },
     { name = "pydantic" },
     { name = "pydantic-extra-types" },
     { name = "pydantic-settings" },
+    { name = "ruff" },
 ]
 
 [package.dev-dependencies]
@@ -156,9 +159,12 @@ requires-dist = [
     { name = "faker", specifier = ">=37.5.3" },
     { name = "jellyfish", specifier = ">=1.2.0" },
     { name = "loguru", specifier = ">=0.7.3" },
+    { name = "mypy", specifier = ">=1.17.1" },
+    { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pydantic-extra-types", specifier = ">=2.10.5" },
     { name = "pydantic-settings", specifier = ">=2.10.1" },
+    { name = "ruff", specifier = ">=0.12.7" },
 ]
 
 [package.metadata.requires-dev]

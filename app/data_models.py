@@ -1,7 +1,7 @@
 """Data models and associated methods used to specify input and output data."""
 
-import re
 import math
+import re
 from typing import Self
 
 from destiny_sdk.enhancements import (
@@ -43,7 +43,7 @@ class Paper(BaseModel):
     issue: str | None = Field(default=None)
     volume: str | None = Field(default=None)
     publisher: str | None = Field(default=None)
-    pages: tuple[int, int] | None = Field(default=None)
+    pages: tuple[int, int] | str | None = Field(default=None)
     abstract: str | None = Field(default=None)
 
     @classmethod
@@ -55,7 +55,7 @@ class Paper(BaseModel):
             if issn_regex.match(v):
                 return v
         return None
-    
+
     @field_validator("pages", mode="before")
     def parse_pages(cls, v):
         if v is None:
@@ -78,11 +78,11 @@ class Paper(BaseModel):
                     prefix_len = len(start) - len(end)
                     end_full = start[:prefix_len] + end
                     return (int(start), int(end_full))
-                except Exception:
+                except (ValueError, TypeError) as e:
                     return None
             return None  # fallback if not parseable
         return None
-    
+
     @model_validator(mode="after")
     def check_for_non_missing(self) -> Self:
         """Ensure there is at least one value in instance."""
@@ -96,7 +96,7 @@ class Paper(BaseModel):
             "Please supply at least one non-None value.",
         )
         raise ValueError(all_none_error)
-    
+
 
 def extract_identifiers(
     identifiers: list[ExternalIdentifier],
