@@ -4,6 +4,7 @@ import math
 import re
 from typing import Self
 
+import pandas as pd
 from destiny_sdk.enhancements import (
     Authorship,
     BibliographicMetadataEnhancement,
@@ -48,6 +49,25 @@ class Paper(BaseModel):
     publisher: str | None = Field(default=None)
     pages: tuple[int, int] | str | None = Field(default=None)
     abstract: str | None = Field(default=None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def convert_nan_to_none(cls, data: dict) -> dict:
+        """Convert any NaN values (from numpy/pandas) to None before validation."""
+        if isinstance(data, dict):
+            cleaned_data = {}
+            for key, value in data.items():
+                # Check for various NaN types
+                if value is None:
+                    cleaned_data[key] = None
+                elif isinstance(value, float) and math.isnan(value):
+                    cleaned_data[key] = None
+                elif pd.isna(value):  # Handles pd.NA, pd.NaT, np.nan
+                    cleaned_data[key] = None
+                else:
+                    cleaned_data[key] = value
+            return cleaned_data
+        return data
 
     @field_validator("issn", mode="after")
     @classmethod

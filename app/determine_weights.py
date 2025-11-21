@@ -9,14 +9,16 @@ from pathlib import Path
 
 import pandas as pd
 from loguru import logger
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationError, field_validator
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 from sklearn.model_selection import train_test_split
+from tqdm import tqdm
 
 from app.data_models import Authorship, DOIIdentifier, Paper
 from app.dedupe import Deduper
 
+SEED = 1234
 BLOCK_RULES = [
     ["title"],
     # ["first_author"],  # blocking on first author
@@ -29,12 +31,25 @@ BLOCK_RULES = [
     ["pages", "issue"],
     ["year", "issue"],
 ]
+DEDUPE_FIELDS = [
+    "doi",
+    "title",
+    "authors",
+    "year",
+    "journal",
+    "pages",
+    "abstract",
+    "volume",
+    "issue",
+]
+
+random.seed(SEED)
 
 
 class ExtendedPaper(Paper):
     """An extension on the Paper class to include duplicate_id."""
 
-    id: int | None = Field(default=None)
+    recordid: int | None = Field(default=None)
     duplicate_id: int | None = Field(default=None, alias="duplicateid")
 
     @field_validator("authors", mode="after")
@@ -97,19 +112,6 @@ def read_process_data_from_file(
     return df.rename(columns={"number": "issue", "author": "authors"})
 
 
-# # load gold standard data
-# gold = pd.read_csv("app/SRSR_duplicates_labelled.csv")
-# gold["author_name"] = gold["author"]
-# gold["issue"] = gold["number"]
-# gold["duplicateid"] = gold["duplicateid"].astype(str)
-# gold_sample = (
-#     gold.sort_values(by="title").head(50).copy()
-# )  # use this for quick dev/testing
-
-# # Inspect columns
-# print(gold.head())
-
-
 def get_first_author(authors: list[Authorship] | None) -> str | None:
     """Get first author from a parsed authorship list."""
     if authors is None:
@@ -123,15 +125,17 @@ def get_first_author(authors: list[Authorship] | None) -> str | None:
 def get_gold_standard_dupes(
     df: pd.DataFrame,
     column: str = "duplicateid",
-    id_column: str = "record_id",
-    sample: int | None = None
+    id_column: str = "recordid",
+    sample: int | None = None,
 ) -> list[tuple[int, int]]:
     """Get rows from gold standard df which are duplicates."""
     positives = []
     grouped = df[df[column].notna()].groupby(column)
 
     for _dup_id, grp in grouped:
-        ids = grp[id_column].tolist()  # Use id_column parameter instead of hardcoded "id"
+        ids = grp[
+            id_column
+        ].tolist()  # Use id_column parameter instead of hardcoded "id"
         for a, b in combinations(ids, 2):
             positives.append((a, b))
 
@@ -144,197 +148,185 @@ def get_gold_standard_dupes(
 def get_gold_standard_close_non_dupes(
     df: pd.DataFrame,
     column: str = "duplicateid",
-    id_column: str = "record_id",
+    id_column: str = "recordid",
     sample: int | None = None,
     block_rules: list = BLOCK_RULES,
 ) -> list[tuple[int, int, int]]:
     """Get rows from gold standard df which are not duplicates, but look like duplicates."""
 
-    def _norm(val: str) -> str | None:
+    def _norm(val) -> str | None:
         """Normalise string."""
-        if not val:
+        if pd.isna(val) or val is None or val == "":
             return None
         return re.sub(r"\s+", " ", str(val).strip().lower())
 
     negatives: list[tuple[int, int, int]] = []
     seen_pairs = set()
-    logger.debug("Hard negative generation per block rule:")
 
-    # For each blocking rule build blocks of ids
-    for rule in block_rules:
+    # Pre-create lookup dict for duplicate IDs (O(n) once instead of O(n²) lookups)
+    dup_lookup = df.set_index(id_column)[column].to_dict()
+
+    logger.info(
+        f"Generating hard negatives from {len(df)} records using {len(block_rules)} blocking rules"
+    )
+
+    for rule_idx, rule in enumerate(block_rules, 1):
+        logger.info(f"Processing rule {rule_idx}/{len(block_rules)}: {rule}")
+
+        # Validate fields exist
+        missing_fields = [f for f in rule if f not in df.columns]
+        if missing_fields:
+            logger.warning(f"Fields {missing_fields} not in dataframe, skipping rule")
+            continue
+
         blocks = defaultdict(list)
 
-        # For each row, create a blocking key
-        for _, row in df.iterrows():
-            # Build the blocking key from the rule fields
-            key_parts = []
-            for field in rule:
-                if field in df.columns:
-                    val = _norm(row[field])
-                    if val is not None:
-                        key_parts.append(val)
+        # Vectorized normalization - much faster than iterrows()
+        # Create a copy with just the fields we need
+        df_subset = df[[id_column] + rule].copy()
 
-            # Skip if any field is missing
-            if len(key_parts) != len(rule):
-                continue
+        # Normalize all fields at once
+        for field in rule:
+            df_subset[f"{field}_norm"] = df_subset[field].apply(_norm)
 
-            # Create blocking key
-            key = tuple(key_parts)
-            # append the id value using the provided id_column
-            blocks[key].append(row[id_column])
+        # Drop rows where any normalized field is None
+        norm_cols = [f"{field}_norm" for field in rule]
+        df_subset = df_subset.dropna(subset=norm_cols)
+
+        # Create blocking keys using vectorized operations
+        df_subset["block_key"] = df_subset[norm_cols].apply(tuple, axis=1)
+
+        # Group by block key - this is much faster than manual grouping
+        for block_key, group in df_subset.groupby("block_key"):
+            ids = group[id_column].tolist()
+            if len(ids) >= 2:
+                blocks[block_key] = ids
 
         total_candidate_pairs = 0
         valid_hard_negatives = 0
 
-        MIN_BLOCK_SIZE = 2
         # Generate pairs within each block
-        for _, ids in blocks.items():
-            if len(ids) < MIN_BLOCK_SIZE:
-                continue
-
-            for a, b in combinations(ids, 2):
+        for block_ids in blocks.values():
+            for a, b in combinations(block_ids, 2):
                 total_candidate_pairs += 1
                 pair_id = tuple(sorted((a, b)))
 
-                # Get duplicate IDs for both papers
-                da = df.loc[df[id_column] == a, column].iloc[0]
-                db = df.loc[df[id_column] == b, column].iloc[0]
+                # Skip if already seen
+                if pair_id in seen_pairs:
+                    continue
 
-                # Only keep if they have different duplicate IDs (i.e., not true duplicates)
+                # Fast lookup instead of .loc (O(1) instead of O(n))
+                da = dup_lookup.get(a)
+                db = dup_lookup.get(b)
+
+                # Only keep if they have different duplicate IDs
+                is_valid_negative = False
                 if pd.notna(da) and pd.notna(db):
-                    if da != db and pair_id not in seen_pairs:
-                        valid_hard_negatives += 1
-                        negatives.append((a, b, 0))  # label=0 for non-duplicates
-                        seen_pairs.add(pair_id)
-                elif pair_id not in seen_pairs:  # At least one doesn't have a duplicate ID
+                    if da != db:
+                        is_valid_negative = True
+                else:
+                    # At least one doesn't have a duplicate ID
+                    is_valid_negative = True
+
+                if is_valid_negative:
+                    valid_hard_negatives += 1
                     negatives.append((a, b, 0))
                     seen_pairs.add(pair_id)
-                    valid_hard_negatives += 1
 
-        logger.debug(
-        f"Rule {tuple(rule)}: candidate pairs={total_candidate_pairs}, "
-        f"valid hard negatives={valid_hard_negatives}"
+        logger.info(
+            f"Rule {tuple(rule)}: {total_candidate_pairs} candidate pairs, "
+            f"{valid_hard_negatives} valid hard negatives, "
+            f"total negatives so far: {len(negatives)}"
         )
 
+    logger.info(f"Total hard negatives generated: {len(negatives)}")
+
+    # Sample negatives if requested
     if sample and len(negatives) > sample:
         negatives = random.sample(negatives, k=sample)
-        logger.debug("Sampled down to %d negatives", len(negatives))
+        logger.info(f"Sampled down to {sample} negatives")
 
     return negatives
 
 
-def run_deduper_on_training_set():
-    pass
-
-
-def build_training_pairs_with_scores(
-    papers: list[Paper],
-    negative_ratio: float = 2.0,
+def build_empty_training_test_set_df(
+    dupes: tuple[int, int], non_dupes: tuple[int, int], non_dupe_ratio: int = 2
 ) -> pd.DataFrame:
-    """
-    Generate 1:1 candidate pairs for deduplication training using dup_id labels.
-    Includes hard negatives via blocking (year+journal, etc.).
-    Computes per-field similarity scores using Deduper.
-    """
-
-    # --- Step 3: Hard negatives using blocking rules ---
-
-    negatives = []
-    seen_pairs = set()
-    print("[debug] Hard negative generation per block rule:")
-
-    for rule in block_rules:
-        blocks = defaultdict(list)
-        for pid, meta in enriched.items():
-            vals = [_norm(meta.get(f)) for f in rule]
-            if None in vals:
-                continue
-            key = tuple(vals)
-            blocks[key].append(pid)
-
-        total_candidate_pairs = 0
-        valid_hard_negatives = 0
-
-        for key, ids in blocks.items():
-            if len(ids) < 2:
-                continue
-            for a, b in combinations(ids, 2):
-                total_candidate_pairs += 1
-                pair_id = tuple(sorted((a, b)))
-                da = enriched[a]["dup_id"]
-                db = enriched[b]["dup_id"]
-                if da != db:
-                    valid_hard_negatives += 1
-                    if pair_id not in seen_pairs:
-                        negatives.append((a, b, 0))
-                        seen_pairs.add(pair_id)
-
-        print(
-            f"[debug] Rule {tuple(rule)}: "
-            f"candidate pairs={total_candidate_pairs}, "
-            f"valid hard negatives={valid_hard_negatives}"
-        )
-
-    print(f"[debug] Total hard negatives generated: {len(negatives)}")
-
-    # --- Sample negatives to maintain balance ---
-    n_pos = len(positives)
-    n_neg_desired = int(n_pos * negative_ratio)
-    if len(negatives) > n_neg_desired:
-        negatives = random.sample(negatives, n_neg_desired)
-    print(f"[debug] negatives sampled: {len(negatives)}")
-
-    all_pairs = positives + negatives
-
-    # --- Step 4: Run Deduper comparisons for all pairs ---
-    results = []
-    print("[debug] computing Deduper similarity scores...")
-
-    for idx, (a, b, label) in enumerate(all_pairs):
-        rec_a = papers_by_id[a]
-        rec_b = papers_by_id[b]
-        deduper = Deduper(reference=rec_a, candidates=[rec_b])
-
-        scores = {}
-        for field in [
-            "doi",
-            "title",
-            "authors",
-            "year",
-            "journal",
-            "pages",
-            "abstract",
-            "volume",
-            "issue",
-        ]:
-            compare_func = getattr(deduper, f"compare_{field}", None)
-            if compare_func:
-                try:
-                    scores[field] = compare_func(rec_a, rec_b)
-                except Exception as e:
-                    scores[field] = None
-                    print(f"[warn] compare_{field} failed: {e}")
-            else:
-                scores[field] = None
-
-        results.append(
-            {
-                "id_1": a,
-                "id_2": b,
-                "label": label,
-                **scores,
-            }
-        )
-
-        if idx % 200 == 0:
-            print(f"[debug] processed {idx}/{len(all_pairs)} pairs")
-
-    df = pd.DataFrame(results)
-    print(f"[debug] final dataframe shape: {df.shape}")
-    print(
-        f"[debug] label distribution: {df['label'].value_counts().to_dict() if not df.empty else 'empty'}"
+    """Create df of dupe and non-dupe pairs."""
+    # get all dupes into our df as id_a and id_b and is_dupe=1
+    dupes_df = pd.DataFrame(dupes).rename(columns={0: "id_a", 1: "id_b"})
+    dupes_df["is_dupe"] = 1
+    # produce sampling target (len(df)*2)
+    sample_target = len(dupes_df) * non_dupe_ratio
+    sampled_non_dupes = random.sample(non_dupes, sample_target)
+    # get sampled non_dupes and add to df
+    non_dupes_df = pd.DataFrame(sampled_non_dupes).rename(
+        columns={0: "id_a", 1: "id_b", 2: "is_dupe"}
     )
-    return df
+    return pd.concat([dupes_df, non_dupes_df], axis=0)
+
+
+def compare_target_fields(
+    record_a: ExtendedPaper,
+    record_b: ExtendedPaper,
+    deduper: Deduper,
+    fields: list = DEDUPE_FIELDS,
+) -> dict[str, float]:
+    """Comapre target fields."""
+    scores = {}
+    for field in fields:
+        compare_method = getattr(deduper, f"compare_{field}", None)
+        if compare_method:
+            try:
+                scores[field] = compare_method(record_a, record_b)
+            except Exception as e:
+                scores[field] = None
+                logger.warning(f"compare_{field} failed: {e}")
+        else:
+            scores[field] = None
+
+    return scores
+
+
+def perform_deduplication_on_training_test_set_df(
+    training_test_df: pd.DataFrame,
+    gold_standard_df: pd.DataFrame,
+    comparison_targets: list = DEDUPE_FIELDS,
+) -> pd.DataFrame:
+    """Perform deduplication using Deduper class on all pairs."""
+    out = []
+    for _, row in tqdm(training_test_df.iterrows()):
+        # id_a (gs) to ExtendedPaper
+        gs_id: int = row["id_a"]
+        gold_standard_record = (
+            gold_standard_df[gold_standard_df["recordid"] == gs_id].iloc[0].to_dict()
+        )
+        test_id: int = row["id_b"]
+        test_record = (
+            gold_standard_df[gold_standard_df["recordid"] == test_id].iloc[0].to_dict()
+        )
+
+        newline = {"id_a": int(gs_id), "id_b": int(test_id), "is_dupe": row["is_dupe"]}
+
+        try:
+            gs_paper = ExtendedPaper(**gold_standard_record)
+            test_paper = ExtendedPaper(**test_record)
+        except ValidationError as e:
+            logger.error(f"validation error on gs {gs_id} test {test_id}.")
+            logger.error(f"error msg: {e}")
+            continue
+
+        deduper = Deduper(reference=gs_paper, candidates=test_paper)
+        comparisons = compare_target_fields(
+            record_a=gs_paper,
+            record_b=test_paper,
+            deduper=deduper,
+            fields=comparison_targets,
+        )
+        newline.update(comparisons)
+        out.append(newline)
+
+    return pd.DataFrame(out)
 
 
 # def train_dedup_model(df_training: pd.DataFrame):
