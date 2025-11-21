@@ -121,17 +121,21 @@ def get_first_author(authors: list[Authorship] | None) -> str | None:
 
 
 def get_gold_standard_dupes(
-    df: pd.DataFrame, column: str = "duplicateid", sample: int | None = None
-) -> tuple[int, int]:
+    df: pd.DataFrame,
+    column: str = "duplicateid",
+    id_column: str = "record_id",
+    sample: int | None = None
+) -> list[tuple[int, int]]:
     """Get rows from gold standard df which are duplicates."""
     positives = []
     grouped = df[df[column].notna()].groupby(column)
-    for dup_id, grp in grouped:
-        ids = grp["id"].tolist()
+
+    for _dup_id, grp in grouped:
+        ids = grp[id_column].tolist()  # Use id_column parameter instead of hardcoded "id"
         for a, b in combinations(ids, 2):
             positives.append((a, b))
 
-    if sample:
+    if sample and len(positives) > sample:
         positives = random.sample(positives, k=sample)
 
     return positives
@@ -140,87 +144,81 @@ def get_gold_standard_dupes(
 def get_gold_standard_close_non_dupes(
     df: pd.DataFrame,
     column: str = "duplicateid",
+    id_column: str = "record_id",
     sample: int | None = None,
     block_rules: list = BLOCK_RULES,
-) -> tuple[int, int]:
+) -> list[tuple[int, int, int]]:
     """Get rows from gold standard df which are not duplicates, but look like duplicates."""
 
-    def _norm(val: str):
+    def _norm(val: str) -> str | None:
         """Normalise string."""
         if not val:
             return None
-        s = str(val).strip().lower()
-        s = re.sub(r"\s+", " ", s)
-        return s
+        return re.sub(r"\s+", " ", str(val).strip().lower())
 
-    negatives = []
+    negatives: list[tuple[int, int, int]] = []
     seen_pairs = set()
-    print("[debug] Hard negative generation per block rule:")
+    logger.debug("Hard negative generation per block rule:")
 
-    pubs_dict = df.to_dict(orient="records")
-
+    # For each blocking rule build blocks of ids
     for rule in block_rules:
-        # what we need here:
-        # - normalise/concatenate the stuff
-        # - save id for the record, as well duplication id
-        # - go through every item of normalised stuff, try to find
-        #   a exact match
-        # - if it's an exact match, we can discard if it is a real duplicate (duplicate_id_a == duplicate_id_b)
-        # - keep all of the remaining ones, that's our negative pairs.
-        # - label non-dupes -> 0; true dupes -> 1
-        # should be able to run the classifier then.
-        if len(rule) == 1:
-            normalised = df[rule[0]].apply(_norm)
-            normalised_df = pd.concat([df[["id", "duplicateid"]], normalised], axis=0)
+        blocks = defaultdict(list)
 
-        elif len(rule) > 1:
-            normalised = ["" for x in range(len(df))]
-            for sub_rule in rule:
-                for i, val in enumerate(df[sub_rule]):
-                    normalised[i] += _norm(val)
-            normalised_df = pd.concat(
-                [df[["id", "duplicateid"]], pd.DataFrame(normalised)], axis=0
-            )
+        # For each row, create a blocking key
+        for _, row in df.iterrows():
+            # Build the blocking key from the rule fields
+            key_parts = []
+            for field in rule:
+                if field in df.columns:
+                    val = _norm(row[field])
+                    if val is not None:
+                        key_parts.append(val)
 
-        # group by
-        grouped = normalised_df.groupby()
+            # Skip if any field is missing
+            if len(key_parts) != len(rule):
+                continue
 
-    # pairs = {}
-    # for rule in block_rules:
-    #     if len(rule) == 1:
-    #         vals = [_norm(val) for val in df[rule]]
-    #     elif len(rule) > 1:
-    #         vals = ["" for x in range(len(df))]
-    #         for sub_rule in rule:
-    #             for i, val in enumerate(df[sub_rule]):
-    #                 vals[i] += _norm(val)
+            # Create blocking key
+            key = tuple(key_parts)
+            # append the id value using the provided id_column
+            blocks[key].append(row[id_column])
 
-    #     pairs[", ".join(rule)] = vals
+        total_candidate_pairs = 0
+        valid_hard_negatives = 0
 
-    total_candidate_pairs = 0
-    valid_hard_negatives = 0
+        MIN_BLOCK_SIZE = 2
+        # Generate pairs within each block
+        for _, ids in blocks.items():
+            if len(ids) < MIN_BLOCK_SIZE:
+                continue
 
-    for key, ids in blocks.items():
-        if len(ids) < 2:
-            continue
-        for a, b in combinations(ids, 2):
-            total_candidate_pairs += 1
-            pair_id = tuple(sorted((a, b)))
-            da = enriched[a]["dup_id"]
-            db = enriched[b]["dup_id"]
-            if da != db:
-                valid_hard_negatives += 1
-                if pair_id not in seen_pairs:
+            for a, b in combinations(ids, 2):
+                total_candidate_pairs += 1
+                pair_id = tuple(sorted((a, b)))
+
+                # Get duplicate IDs for both papers
+                da = df.loc[df[id_column] == a, column].iloc[0]
+                db = df.loc[df[id_column] == b, column].iloc[0]
+
+                # Only keep if they have different duplicate IDs (i.e., not true duplicates)
+                if pd.notna(da) and pd.notna(db):
+                    if da != db and pair_id not in seen_pairs:
+                        valid_hard_negatives += 1
+                        negatives.append((a, b, 0))  # label=0 for non-duplicates
+                        seen_pairs.add(pair_id)
+                elif pair_id not in seen_pairs:  # At least one doesn't have a duplicate ID
                     negatives.append((a, b, 0))
                     seen_pairs.add(pair_id)
+                    valid_hard_negatives += 1
 
-    print(
-        f"[debug] Rule {tuple(rule)}: "
-        f"candidate pairs={total_candidate_pairs}, "
+        logger.debug(
+        f"Rule {tuple(rule)}: candidate pairs={total_candidate_pairs}, "
         f"valid hard negatives={valid_hard_negatives}"
-    )
+        )
 
-    print(f"[debug] Total hard negatives generated: {len(negatives)}")
+    if sample and len(negatives) > sample:
+        negatives = random.sample(negatives, k=sample)
+        logger.debug("Sampled down to %d negatives", len(negatives))
 
     return negatives
 
