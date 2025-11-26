@@ -103,9 +103,10 @@ def read_process_data_from_file(
         "nasysd",
         "ngold",
     ],
+    **kwargs,
 ) -> pd.DataFrame:
     """Read and process our gold standard data from csv."""
-    df = pd.read_csv(filepath)
+    df = pd.read_csv(filepath, **kwargs)
     df.columns = [col.lower() for col in df.columns]
     final_cols = [col for col in df.columns if col not in cols_to_drop]
     df = df[final_cols]
@@ -249,7 +250,7 @@ def get_gold_standard_close_non_dupes(
     return negatives
 
 
-def build_empty_training_test_set_df(
+def build_pre_comparison_training_test_set_df(
     dupes: tuple[int, int], non_dupes: tuple[int, int], non_dupe_ratio: int = 2
 ) -> pd.DataFrame:
     """Create df of dupe and non-dupe pairs."""
@@ -329,45 +330,45 @@ def perform_deduplication_on_training_test_set_df(
     return pd.DataFrame(out)
 
 
-# def train_dedup_model(df_training: pd.DataFrame):
-#     feature_cols = [
-#         "doi",
-#         "title",
-#         "authors",
-#         "year",
-#         "journal",
-#         "pages",
-#         "abstract",
-#         "volume",
-#         "issue",
-#     ]
-#     X = df_training[feature_cols].fillna(0)
-#     y = df_training["label"]
+def train_dedup_model(df_training: pd.DataFrame):
+    feature_cols = [
+        "doi",
+        "title",
+        "authors",
+        "year",
+        "journal",
+        "pages",
+        "abstract",
+        "volume",
+        "issue",
+    ]
+    X = df_training[feature_cols].fillna(0)
+    y = df_training["label"]
 
-#     X_train, X_val, y_train, y_val = train_test_split(
-#         X, y, test_size=0.2, random_state=42, stratify=y
-#     )
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
 
-#     clf = RandomForestClassifier(
-#         n_estimators=200, max_depth=None, random_state=42, class_weight="balanced"
-#     )
-#     clf.fit(X_train, y_train)
+    clf = RandomForestClassifier(
+        n_estimators=200, max_depth=None, random_state=42, class_weight="balanced"
+    )
+    clf.fit(X_train, y_train)
 
-#     y_pred = clf.predict(X_val)
-#     y_prob = clf.predict_proba(X_val)[:, 1]
+    y_pred = clf.predict(X_val)
+    y_prob = clf.predict_proba(X_val)[:, 1]
 
-#     print("[info] Validation metrics:")
-#     print(classification_report(y_val, y_pred))
-#     print("Confusion Matrix:\n", confusion_matrix(y_val, y_pred))
-#     print("ROC-AUC:", roc_auc_score(y_val, y_prob))
+    print("[info] Validation metrics:")
+    print(classification_report(y_val, y_pred))
+    print("Confusion Matrix:\n", confusion_matrix(y_val, y_pred))
+    print("ROC-AUC:", roc_auc_score(y_val, y_prob))
 
-#     # Feature importance
-#     feat_imp = pd.DataFrame(
-#         {"feature": feature_cols, "importance": clf.feature_importances_}
-#     ).sort_values("importance", ascending=False)
-#     print("[info] Feature importance:\n", feat_imp)
+    # Feature importance
+    feat_imp = pd.DataFrame(
+        {"feature": feature_cols, "importance": clf.feature_importances_}
+    ).sort_values("importance", ascending=False)
+    print("[info] Feature importance:\n", feat_imp)
 
-#     return clf
+    return clf
 
 
 # # === 3. Predict duplicates for new candidate pairs ===

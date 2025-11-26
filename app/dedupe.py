@@ -142,11 +142,7 @@ class Deduper:
 
         return dupe_probabilities
 
-    def compare_doi(self, 
-                    record_a: Paper,
-                    record_b: Paper,
-                    **kwargs
-    ) -> float:
+    def compare_doi(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
         Compare DOIs between two records (exact match after normalization).
 
@@ -161,7 +157,9 @@ class Deduper:
             doi = doi.replace("%28", "(").replace("%29", ")")
             doi = re.sub(r"^(https?://)?(dx\.)?doi\.org/", "", doi, flags=re.IGNORECASE)
             doi = re.sub(r"^DOI[: ]?", "", doi, flags=re.IGNORECASE)
-            match = re.search(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", doi, flags=re.IGNORECASE)
+            match = re.search(
+                r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", doi, flags=re.IGNORECASE
+            )
             if not match:
                 return None
             return match.group(0).strip().lower()
@@ -240,7 +238,6 @@ class Deduper:
 
         return float(pubmed_id_a_str == pubmed_id_b_str)
 
-
     def compare_isbn(self, record_a: "Paper", record_b: "Paper", **kwargs) -> float:
         """
         Compare 2 ISBNs after normalization.
@@ -248,6 +245,7 @@ class Deduper:
         Returns:
             float: 1.0 if equal, 0.0 otherwise.
         """
+
         def normalize_isbn(isbn: str) -> str:
             """Normalize ISBN string by removing common extra patterns."""
             if not isbn:
@@ -270,14 +268,20 @@ class Deduper:
             return 0.0
 
         try:
-            authors_a = ", ".join([
-                getattr(a, "author_name", None) or getattr(a, "display_name", "")
-                for a in record_a.authors if a is not None
-            ])
-            authors_b = ", ".join([
-                getattr(a, "author_name", None) or getattr(a, "display_name", "")
-                for a in record_b.authors if a is not None
-            ])
+            authors_a = ", ".join(
+                [
+                    getattr(a, "author_name", None) or getattr(a, "display_name", "")
+                    for a in record_a.authors
+                    if a is not None
+                ]
+            )
+            authors_b = ", ".join(
+                [
+                    getattr(a, "author_name", None) or getattr(a, "display_name", "")
+                    for a in record_b.authors
+                    if a is not None
+                ]
+            )
         except AttributeError as e:
             logger.error(f"Error extracting authors: {e}")
             return 0.0
@@ -288,15 +292,14 @@ class Deduper:
             return 0.0
 
         # Allow override algorithm via kwargs, fallback to Levenshtein/Jaro-Winkler
-        algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER)
-        return Deduper.calculate_string_distance(authors_a, authors_b, string_distance_algorithm=algo)
+        algo = kwargs.get(
+            "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
+        )
+        return Deduper.calculate_string_distance(
+            authors_a, authors_b, string_distance_algorithm=algo
+        )
 
-    def compare_title(
-            self, 
-            record_a: Paper, 
-            record_b: Paper, 
-            **kwargs
-        ) -> float:
+    def compare_title(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
         Compare two titles using Levenshtein distance.
         Returns a float between 0 and 1.
@@ -306,9 +309,13 @@ class Deduper:
             return 0.0
 
         # Allow override algorithm via kwargs, fallback to Levenshtein
-        algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.LEVENSHTEIN)
+        algo = kwargs.get(
+            "string_distance_algorithm", StringDistanceAlgorithm.LEVENSHTEIN
+        )
 
-        return Deduper.calculate_string_distance(record_a.title, record_b.title, string_distance_algorithm=algo)
+        return Deduper.calculate_string_distance(
+            record_a.title, record_b.title, string_distance_algorithm=algo
+        )
 
     def compare_year(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
@@ -343,9 +350,13 @@ class Deduper:
             return 0.0
 
         # Allow override algorithm via kwargs, fallback to Jaro-Winkler
-        algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER)
+        algo = kwargs.get(
+            "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
+        )
 
-        return Deduper.calculate_string_distance(record_a.journal, record_b.journal, string_distance_algorithm=algo)
+        return Deduper.calculate_string_distance(
+            record_a.journal, record_b.journal, string_distance_algorithm=algo
+        )
 
     def compare_publisher(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
@@ -403,9 +414,12 @@ class Deduper:
         pages_a = normalize_pages(record_a.pages)
         pages_b = normalize_pages(record_b.pages)
 
-        algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER)
-        return Deduper.calculate_string_distance(pages_a, pages_b, string_distance_algorithm=algo)
-
+        algo = kwargs.get(
+            "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
+        )
+        return Deduper.calculate_string_distance(
+            pages_a, pages_b, string_distance_algorithm=algo
+        )
 
     def compare_volume(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
@@ -415,8 +429,12 @@ class Deduper:
         if not record_a.volume or not record_b.volume:
             return 0.0
 
-        algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER)
-        return Deduper.calculate_string_distance(record_a.volume, record_b.volume, string_distance_algorithm=algo)
+        algo = kwargs.get(
+            "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
+        )
+        return Deduper.calculate_string_distance(
+            record_a.volume, record_b.volume, string_distance_algorithm=algo
+        )
 
     def compare_issue(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
@@ -426,8 +444,12 @@ class Deduper:
         if not record_a.issue or not record_b.issue:
             return 0.0
 
-        algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER)
-        return Deduper.calculate_string_distance(record_a.issue, record_b.issue, string_distance_algorithm=algo)
+        algo = kwargs.get(
+            "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
+        )
+        return Deduper.calculate_string_distance(
+            record_a.issue, record_b.issue, string_distance_algorithm=algo
+        )
 
     def compare_abstract(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
@@ -439,7 +461,9 @@ class Deduper:
         if not record_a.abstract or not record_b.abstract:
             return 0.0
 
-        algo = kwargs.get("string_distance_algorithm", StringDistanceAlgorithm.LEVENSHTEIN)
+        algo = kwargs.get(
+            "string_distance_algorithm", StringDistanceAlgorithm.LEVENSHTEIN
+        )
         return Deduper.calculate_string_distance(
             record_a.abstract, record_b.abstract, string_distance_algorithm=algo
         )
