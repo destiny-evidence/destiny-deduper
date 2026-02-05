@@ -14,7 +14,7 @@ authors = [
     "Nik Loynes <n.loynes@ucl.ac.uk>",
 ]
 dependencies = [
-    "destiny-sdk>=0.2.2",
+    "destiny-sdk>=0.9.0,<0.10.0",
     "faker>=37.5.3",
     "jellyfish>=1.2.0",
     "loguru>=0.7.3",
