@@ -40,7 +40,9 @@ class Paper(BaseModel):
     year: int | None = Field(default=None)
     journal: str | None = Field(default=None)
     publisher: str | None = Field(default=None)
-    pages: tuple[int, int] | None = Field(default=None)
+    pages: tuple[str, str] | None = Field(default=None)  # mirrors destiny
+    volume: str | None = Field(default=None)
+    issue: str | None = Field(default=None)
     abstract: str | None = Field(default=None)
 
     @classmethod
@@ -143,6 +145,10 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
     if issn_list:
         issn = issn_list[0] if isinstance(issn_list, list) else issn_list
 
+    # get volume and issue if available
+    volume = loc_enh_extra.get("volume", None) if loc_enh_extra else None
+    issue = loc_enh_extra.get("issue", None) if loc_enh_extra else None
+
     journal = journal_bib if journal_bib is not None else journal_loc
 
     # TODO: get pages -- where?
@@ -160,5 +166,7 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
         journal=journal,
         publisher=publisher,
         pages=pages,
+        volume=volume,
+        issue=issue,
         abstract=abstract,
     )
