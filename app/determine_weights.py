@@ -24,12 +24,12 @@ BLOCK_RULES_OLD = [
     # ["first_author"],  # blocking on first author
     ["abstract"],
     ["doi"],
-    #["year", "journal"],
+    ["year", "journal"],
     ["year", "pages"],
-    #["year", "volume"],
+    ["year", "volume"],
     ["pages", "volume"],
     ["pages", "issue"],
-    #["year", "issue"],
+    ["year", "issue"],
 ]
 
 BLOCK_RULES = [
