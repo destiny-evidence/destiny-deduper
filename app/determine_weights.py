@@ -15,21 +15,30 @@ from sklearn.metrics import classification_report, confusion_matrix, roc_auc_sco
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-from app.data_models import Authorship, DOIIdentifier, Paper
-from app.dedupe import Deduper
+from app.data_models_old import Authorship, DOIIdentifier, Paper
+from app.dedupe_old import Deduper
 
 SEED = 1234
-BLOCK_RULES = [
+BLOCK_RULES_OLD = [
     ["title"],
     # ["first_author"],  # blocking on first author
     ["abstract"],
     ["doi"],
-    ["year", "journal"],
+    #["year", "journal"],
     ["year", "pages"],
-    ["year", "volume"],
+    #["year", "volume"],
     ["pages", "volume"],
     ["pages", "issue"],
-    ["year", "issue"],
+    #["year", "issue"],
+]
+
+BLOCK_RULES = [
+    ["title"],
+    ["abstract"],
+    ["doi"],
+    ["year", "pages"],
+    ["pages", "volume"],
+    ["pages", "issue"],
 ]
 DEDUPE_FIELDS = [
     "doi",
@@ -59,7 +68,6 @@ class ExtendedPaper(Paper):
         Convert raw author string to list of Authorship objects.
         Handles NaN, 'anonymous', and multiple authors separated by '.'.
         """
-        logger.debug("hello!")
         if isinstance(v, list):
             return v
 
@@ -71,7 +79,6 @@ class ExtendedPaper(Paper):
             # Split on "." followed by letter (typical author initials)
             author_names = re.split(r"\.(?=\w)", v)
             author_names = [a.strip() for a in author_names if a.strip()]
-            logger.debug(author_names)
             if not author_names:
                 return None
             authors_list = []
@@ -250,6 +257,69 @@ def get_gold_standard_close_non_dupes(
     return negatives
 
 
+def get_all_pairs(
+    df: pd.DataFrame,
+    column: str = "duplicateid",
+    id_column: str = "recordid",
+    sample: int | None = None,
+) -> list[tuple[int, int, int]]:
+    """
+    Return all unordered pairs of record ids from `df` with labels.
+
+    Each returned tuple is (id_a, id_b, label) where label==1 if both records
+    have a non-null duplicate id and that id is equal (i.e. they are true
+    duplicates in the gold), otherwise label==0.
+
+    If `sample` is provided and the total number of pairs is larger than
+    `sample`, the function will return `sample` randomly sampled unique pairs.
+
+    Notes:
+    - This enumerates O(n^2) pairs; for large `df` use `sample` to avoid
+      excessive memory/time use.
+    - Pair ordering is canonical (a < b) so each unordered pair appears once.
+    """
+    ids = list(df[id_column].tolist())
+    n = len(ids)
+    total_pairs = n * (n - 1) // 2
+    logger.info(
+        f"Preparing all pairs from {n} records (total unordered pairs: {total_pairs})"
+    )
+
+    dup_lookup = df.set_index(id_column)[column].to_dict()
+
+    # If sampling requested and total is large, sample unique pairs uniformly
+    if sample and total_pairs > sample:
+        logger.info(f"Sampling {sample} pairs from {total_pairs} total pairs")
+        pairs = []
+        seen = set()
+        while len(pairs) < sample:
+            a, b = random.sample(ids, 2)
+            if a == b:
+                continue
+            pa, pb = (a, b) if a < b else (b, a)
+            if (pa, pb) in seen:
+                continue
+            seen.add((pa, pb))
+            da = dup_lookup.get(pa)
+            db = dup_lookup.get(pb)
+            label = 1 if (pd.notna(da) and pd.notna(db) and da == db) else 0
+            pairs.append((pa, pb, label))
+        return pairs
+
+    # Otherwise enumerate all pairs deterministically
+    out = []
+    for i in range(n):
+        a = ids[i]
+        for j in range(i + 1, n):
+            b = ids[j]
+            da = dup_lookup.get(a)
+            db = dup_lookup.get(b)
+            label = 1 if (pd.notna(da) and pd.notna(db) and da == db) else 0
+            out.append((a, b, label))
+
+    return out
+
+
 def build_pre_comparison_training_test_set_df(
     dupes: tuple[int, int], non_dupes: tuple[int, int], non_dupe_ratio: int = 2
 ) -> pd.DataFrame:
@@ -265,6 +335,30 @@ def build_pre_comparison_training_test_set_df(
         columns={0: "id_a", 1: "id_b", 2: "is_dupe"}
     )
     return pd.concat([dupes_df, non_dupes_df], axis=0)
+
+
+def build_paired_comparison_df(
+    dupes: list[tuple[int, int]], non_dupes: list[tuple[int, int]]
+) -> pd.DataFrame:
+    """Create df of all dupe and non-dupe pairs without ratio sampling.
+    
+    Takes all provided dupes and non-dupes and combines them into a single DataFrame
+    for comparison. No sampling or ratio logic applied.
+    
+    Args:
+        dupes: List of (id_a, id_b) tuples that are duplicates
+        non_dupes: List of (id_a, id_b) tuples that are non-duplicates
+    
+    Returns:
+        DataFrame with columns [id_a, id_b, is_dupe]
+    """
+    dupes_df = pd.DataFrame(dupes).rename(columns={0: "id_a", 1: "id_b"})
+    dupes_df["is_dupe"] = 1
+    
+    non_dupes_df = pd.DataFrame(non_dupes).rename(columns={0: "id_a", 1: "id_b"})
+    non_dupes_df["is_dupe"] = 0
+    
+    return pd.concat([dupes_df, non_dupes_df], axis=0).reset_index(drop=True)
 
 
 def compare_target_fields(

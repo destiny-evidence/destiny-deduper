@@ -1,5 +1,7 @@
 import re
-from app.data_models import DOIIdentifier, Authorship
+
+from app.data_models_old import Authorship, DOIIdentifier
+
 
 def normalize_doi(doi: str | None) -> str | None:
     if not doi:
@@ -12,6 +14,7 @@ def normalize_doi(doi: str | None) -> str | None:
         doi = match.group(0)
     return doi.strip().lower()
 
+
 def normalize_isbn(isbn: str | None) -> str | None:
     if not isbn:
         return None
@@ -19,6 +22,7 @@ def normalize_isbn(isbn: str | None) -> str | None:
     isbn = re.sub(r"\s*\(ELECTRONIC\).*", "", isbn, flags=re.IGNORECASE)
     isbn = re.sub(r"\\N.*", "", isbn)
     return isbn.strip().lower()
+
 
 def normalize_pages(page_range: str | None) -> str | None:
     if not page_range:
@@ -29,14 +33,16 @@ def normalize_pages(page_range: str | None) -> str | None:
         return page_range
     start, end = parts[0].strip(), parts[1].strip()
     if len(end) < len(start):
-        end = start[:len(start)-len(end)] + end
+        end = start[: len(start) - len(end)] + end
     return f"{start}-{end}"
+
 
 def normalize_author_name(name: str) -> str:
     """Normalize author name (strip, remove dots, lowercase)."""
     if not name:
         return ""
     return name.replace(".", "").strip().lower()
+
 
 def normalize_authors(authors: list[str] | None) -> list[Authorship] | None:
     if not authors:
