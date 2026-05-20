@@ -34,11 +34,13 @@ BLOCK_RULES_OLD = [
 
 BLOCK_RULES = [
     ["title"],
+    # ["first_author"],  # blocking on first author
     ["abstract"],
     ["doi"],
+    ["year", "journal"],
     ["year", "pages"],
+    ["year", "volume"],
     ["pages", "volume"],
-    ["pages", "issue"],
 ]
 DEDUPE_FIELDS = [
     "doi",
@@ -60,6 +62,19 @@ class ExtendedPaper(Paper):
 
     recordid: int | None = Field(default=None)
     duplicate_id: int | None = Field(default=None, alias="duplicateid")
+
+    @field_validator("pages", mode="before")
+    @classmethod
+    def parse_pages(cls, v: str | float | None) -> str | None:
+        """
+        Clean up pages field, handling NaN and empty strings.
+        """
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            return v if v else None
+        return None
 
     @field_validator("authors", mode="after")
     @classmethod

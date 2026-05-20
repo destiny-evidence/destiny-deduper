@@ -15,6 +15,20 @@ def normalize_doi(doi: str | None) -> str | None:
     return doi.strip().lower()
 
 
+def strip_doi_punctuation(doi: str) -> str:
+    """Strip . - _ from the DOI suffix for fuzzy comparison.
+
+    Handles common database artefacts such as a missing dot (100B3BJJ vs
+    100B3.BJJ) or underscore/hyphen substitution (eurrev_2018 vs
+    eurrev-2018).  Only the part after the first '/' is altered so the
+    registrant prefix (10.XXXX) is never affected.
+    """
+    if "/" not in doi:
+        return doi
+    prefix, suffix = doi.split("/", 1)
+    return prefix + "/" + re.sub(r"[-_.]", "", suffix)
+
+
 def normalize_isbn(isbn: str | None) -> str | None:
     if not isbn:
         return None

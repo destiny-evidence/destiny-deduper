@@ -40,7 +40,7 @@ class Paper(BaseModel):
     year: int | None = Field(default=None)
     journal: str | None = Field(default=None)
     publisher: str | None = Field(default=None)
-    pages: tuple[str, str] | None = Field(default=None)  # mirrors destiny
+    pages: str | None = Field(default=None)
     volume: str | None = Field(default=None)
     issue: str | None = Field(default=None)
     abstract: str | None = Field(default=None)
