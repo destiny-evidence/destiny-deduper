@@ -1,10 +1,10 @@
 thresholds:
   doi_partial_match: 0.90
-  partial_title_match: 0.90
 
   title:
     veto: 0.80
     similarity: 0.97
+    partial_match_ratio: 0.9
 
   author:
     similarity: 0.92
@@ -34,12 +34,14 @@ weights:
   abstract: -0.29
   volume: 0.38
   issue: -0.22
+  intercept: -8.8
 
 patterns:
   html_tag: "<[^>]+>"
   non_alphanumeric: "[^a-z0-9\\s]"
   journal_punctuation: "[^\\w\\s]"
   part_number: "\\bpart\\s+(\\d+|[ivxlcdmIVXLCDM]+)\\b"
+  numeric_digits: "\d+(?:\.\d+)?"
 
 roman_numerals:
   i: 1

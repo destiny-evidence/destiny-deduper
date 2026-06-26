@@ -7,20 +7,23 @@ from loguru import logger
 from pydantic import BaseModel
 from rapidfuzz import fuzz
 
+from app.config import get_settings
 from app.data_models import Paper
 from app.normalisers import normalise_doi, normalise_part_number
-from app.utils import clean_title_for_partial_ratio, compare_titles
+from app.regexes import PART_NUMBER_RE
+from app.utils import clean_title_for_partial_ratio
 
-PART_NUMBER_RE = re.compile(r"\bpart\s+(\d+|[ivxlcdmIVXLCDM]+)\b", re.IGNORECASE)
-PARTIAL_TITLE_MATCH_RATIO = 0.9
-JOURNAL_MISMATCH_THRESHOLD = 0.7
-PAPER_MISMATCH_THRESHOLD = 0.9
-MAX_MISMATCH_COUNT = 2
-AUTHOR_FIRST_CHARS = 7
-STRONG_METADATA_MATCH_THRESHOLD = 0.97
-AUTHORS_SIM_THRESHOLD = 0.92
-JOURNAL_SIM_THRESHOLD = 0.92
-TITLE_VETO_THRESHOLD = 0.80
+settings = get_settings()
+
+PARTIAL_TITLE_MATCH_RATIO = settings.thresholds.title.partial_match_ratio
+JOURNAL_MISMATCH_THRESHOLD = settings.thresholds.journal.similarity
+PAPER_MISMATCH_THRESHOLD = settings.thresholds.paper.match
+MAX_MISMATCH_COUNT = settings.thresholds.min_mismatches_for_veto
+AUTHOR_FIRST_CHARS = settings.thresholds.author.first_chars
+STRONG_METADATA_MATCH_THRESHOLD = settings.thresholds.strong_metadata_match
+AUTHORS_SIM_THRESHOLD = settings.thresholds.author.similarity
+JOURNAL_SIM_THRESHOLD = settings.thresholds.journal.similarity
+TITLE_VETO_THRESHOLD = settings.thresholds.title.similarity
 
 
 class ComparisonContext(BaseModel):
@@ -188,7 +191,7 @@ def check_title_and_metadata_mismatch(ctx: ComparisonContext) -> bool:
     to treat as non-dupe.
 
     """
-    title_sim = compare_titles(ctx.record_a, ctx.record_b)
+    title_sim = ctx.deduper.compare_titles(ctx.record_a, ctx.record_b)
     if title_sim < TITLE_VETO_THRESHOLD:
         pages_mismatch = (
             ctx.record_a.pages is not None
@@ -254,7 +257,7 @@ def check_year_gap_abstract_numeric_mismatch(
     if abs(int(ctx.record_a.year) - int(ctx.record_b.year)) <= 1:
         return False
 
-    title_sim = compare_titles(ctx.record_a, ctx.record_b)
+    title_sim = ctx.deduper.compare_titles(ctx.record_a, ctx.record_b)
     authors_sim = ctx.deduper.compare_authors(ctx.record_a, ctx.record_b)
     journal_sim = ctx.deduper.compare_journal(ctx.record_a, ctx.record_b)
 

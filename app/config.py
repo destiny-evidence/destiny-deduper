@@ -20,6 +20,7 @@ class TitleThresholds(BaseModel):
 
     veto: float = Field(default=0.80)
     similarity: float = Field(default=0.97)
+    partial_match_ratio: float = Field(default=0.9)
 
 
 class AuthorThresholds(BaseModel):

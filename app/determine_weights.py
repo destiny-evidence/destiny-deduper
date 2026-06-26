@@ -15,7 +15,7 @@ from sklearn.metrics import classification_report, confusion_matrix, roc_auc_sco
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-from app.data_models_old import Authorship, DOIIdentifier, Paper
+from app.data_models_old import Authorship, Paper
 from app.dedupe_old import Deduper
 
 SEED = 1234
@@ -292,6 +292,7 @@ def get_all_pairs(
     - This enumerates O(n^2) pairs; for large `df` use `sample` to avoid
       excessive memory/time use.
     - Pair ordering is canonical (a < b) so each unordered pair appears once.
+
     """
     ids = list(df[id_column].tolist())
     n = len(ids)
@@ -355,24 +356,26 @@ def build_pre_comparison_training_test_set_df(
 def build_paired_comparison_df(
     dupes: list[tuple[int, int]], non_dupes: list[tuple[int, int]]
 ) -> pd.DataFrame:
-    """Create df of all dupe and non-dupe pairs without ratio sampling.
-    
+    """
+    Create df of all dupe and non-dupe pairs without ratio sampling.
+
     Takes all provided dupes and non-dupes and combines them into a single DataFrame
     for comparison. No sampling or ratio logic applied.
-    
+
     Args:
         dupes: List of (id_a, id_b) tuples that are duplicates
         non_dupes: List of (id_a, id_b) tuples that are non-duplicates
-    
+
     Returns:
         DataFrame with columns [id_a, id_b, is_dupe]
+
     """
     dupes_df = pd.DataFrame(dupes).rename(columns={0: "id_a", 1: "id_b"})
     dupes_df["is_dupe"] = 1
-    
+
     non_dupes_df = pd.DataFrame(non_dupes).rename(columns={0: "id_a", 1: "id_b"})
     non_dupes_df["is_dupe"] = 0
-    
+
     return pd.concat([dupes_df, non_dupes_df], axis=0).reset_index(drop=True)
 
 
