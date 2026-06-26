@@ -1,0 +1,182 @@
+thresholds:
+  doi_partial_match: 0.90
+  partial_title_match: 0.90
+
+  title:
+    veto: 0.80
+    similarity: 0.97
+
+  author:
+    similarity: 0.92
+    first_chars: 7
+
+  journal:
+    similarity: 0.70
+    strong_similarity: 0.92
+    abbreviation: 0.70
+
+  abstract:
+    similarity: 0.70
+
+  paper:
+    match: 0.90
+
+  strong_metadata_match: 0.97
+  min_mismatches_for_veto: 2
+
+weights:
+  doi: 2.28
+  title: 6.38
+  authors: 2.44
+  year: 0.12
+  journal: 1.42
+  pages: 1.01
+  abstract: -0.29
+  volume: 0.38
+  issue: -0.22
+
+patterns:
+  html_tag: "<[^>]+>"
+  non_alphanumeric: "[^a-z0-9\\s]"
+  journal_punctuation: "[^\\w\\s]"
+  part_number: "\\bpart\\s+(\\d+|[ivxlcdmIVXLCDM]+)\\b"
+
+roman_numerals:
+  i: 1
+  v: 5
+  x: 10
+  l: 50
+  c: 100
+  d: 500
+  m: 1000
+
+stopwords:
+  title:
+    - "a"
+    - "an"
+    - "the"
+    - "of"
+    - "in"
+    - "for"
+    - "and"
+    - "or"
+    - "to"
+    - "with"
+    - "on"
+    - "at"
+    - "by"
+    - "from"
+    - "as"
+    - "is"
+    - "are"
+    - "was"
+    - "were"
+    - "be"
+    - "been"
+    - "its"
+    - "it"
+    - "this"
+    - "that"
+    - "these"
+    - "those"
+
+  journal:
+    - "a"
+    - "an"
+    - "the"
+    - "of"
+    - "in"
+    - "for"
+    - "and"
+    - "or"
+    - "to"
+    - "with"
+    - "on"
+    - "at"
+    - "by"
+    - "from"
+    - "as"
+    - "is"
+    - "are"
+
+languages:
+  - "english"
+  - "french"
+  - "german"
+  - "italian"
+  - "spanish"
+  - "portuguese"
+  - "russian"
+  - "chinese"
+  - "japanese"
+  - "korean"
+  - "arabic"
+  - "dutch"
+  - "swedish"
+  - "norwegian"
+  - "finnish"
+  - "danish"
+  - "polish"
+  - "czech"
+  - "hungarian"
+  - "turkish"
+  - "greek"
+  - "hebrew"
+  - "hindi"
+  - "bengali"
+  - "thai"
+  - "vietnamese"
+  - "persian"
+  - "romanian"
+  - "serbian"
+  - "croatian"
+  - "slovak"
+  - "slovenian"
+  - "bulgarian"
+  - "ukrainian"
+  - "estonian"
+  - "latvian"
+  - "lithuanian"
+  - "malay"
+  - "indonesian"
+  - "filipino"
+  - "urdu"
+  - "tamil"
+  - "telugu"
+  - "marathi"
+  - "punjabi"
+  - "gujarati"
+  - "swahili"
+  - "afrikaans"
+  - "icelandic"
+  - "irish"
+  - "welsh"
+  - "albanian"
+  - "armenian"
+  - "azerbaijani"
+  - "basque"
+  - "belarusian"
+  - "bosnian"
+  - "catalan"
+  - "georgian"
+  - "kazakh"
+  - "kyrgyz"
+  - "macedonian"
+  - "mongolian"
+  - "tajik"
+  - "uzbek"
+  - "turkmen"
+  - "lao"
+  - "khmer"
+  - "burmese"
+  - "sinhalese"
+  - "nepali"
+  - "pashto"
+  - "somali"
+  - "amharic"
+  - "zulu"
+  - "xhosa"
+  - "maori"
+  - "samoan"
+  - "tongan"
+  - "hawaiian"
