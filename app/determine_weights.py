@@ -21,7 +21,6 @@ from app.dedupe_old import Deduper
 SEED = 1234
 BLOCK_RULES_OLD = [
     ["title"],
-    # ["first_author"],  # blocking on first author
     ["abstract"],
     ["doi"],
     ["year", "journal"],
@@ -34,7 +33,6 @@ BLOCK_RULES_OLD = [
 
 BLOCK_RULES = [
     ["title"],
-    # ["first_author"],  # blocking on first author
     ["abstract"],
     ["doi"],
     ["year", "journal"],
@@ -56,6 +54,8 @@ DEDUPE_FIELDS = [
 
 random.seed(SEED)
 
+_MIN_BLOCK_SIZE = 2
+
 
 class ExtendedPaper(Paper):
     """An extension on the Paper class to include duplicate_id."""
@@ -66,14 +66,12 @@ class ExtendedPaper(Paper):
     @field_validator("pages", mode="before")
     @classmethod
     def parse_pages(cls, v: str | float | None) -> str | None:
-        """
-        Clean up pages field, handling NaN and empty strings.
-        """
+        """Clean up pages field, handling NaN and empty strings."""
         if v is None or (isinstance(v, float) and math.isnan(v)):
             return None
         if isinstance(v, str):
             v = v.strip()
-            return v if v else None
+            return v or None
         return None
 
     @field_validator("authors", mode="after")
@@ -128,11 +126,11 @@ def read_process_data_from_file(
     **kwargs,
 ) -> pd.DataFrame:
     """Read and process our gold standard data from csv."""
-    df = pd.read_csv(filepath, **kwargs)
-    df.columns = [col.lower() for col in df.columns]
-    final_cols = [col for col in df.columns if col not in cols_to_drop]
-    df = df[final_cols]
-    return df.rename(columns={"number": "issue", "author": "authors"})
+    refdata = pd.read_csv(filepath, **kwargs)
+    refdata.columns = [col.lower() for col in refdata.columns]
+    final_cols = [col for col in refdata.columns if col not in cols_to_drop]
+    refdata = refdata[final_cols]
+    return refdata.rename(columns={"number": "issue", "author": "authors"})
 
 
 def get_first_author(authors: list[Authorship] | None) -> str | None:
@@ -168,6 +166,36 @@ def get_gold_standard_dupes(
     return positives
 
 
+def _generate_block_pairs(
+    block_ids: list[int],
+    seen_pairs: set,
+    dup_lookup: dict,
+) -> tuple[list[tuple[int, int, int]], int, int]:
+    """
+    Generate hard negative pairs from a block of candidate IDs.
+
+    Returns (new_pairs, total_candidate_count, valid_hard_negative_count).
+
+    """
+    pairs: list[tuple[int, int, int]] = []
+    total = 0
+    valid = 0
+    for a, b in combinations(block_ids, 2):
+        total += 1
+        pair_id = tuple(sorted((a, b)))
+        if pair_id in seen_pairs:
+            continue
+        da = dup_lookup.get(a)
+        db = dup_lookup.get(b)
+        # Skip confirmed duplicate pairs (both share the same non-null dup_id)
+        if pd.notna(da) and pd.notna(db) and da == db:
+            continue
+        valid += 1
+        pairs.append((a, b, 0))
+        seen_pairs.add(pair_id)
+    return pairs, total, valid
+
+
 def get_gold_standard_close_non_dupes(
     df: pd.DataFrame,
     column: str = "duplicateid",
@@ -177,14 +205,14 @@ def get_gold_standard_close_non_dupes(
 ) -> list[tuple[int, int, int]]:
     """Get rows from gold standard df which are not duplicates, but look like duplicates."""
 
-    def _norm(val) -> str | None:
+    def _norm(val: object) -> str | None:
         """Normalise string."""
         if pd.isna(val) or val is None or val == "":
             return None
         return re.sub(r"\s+", " ", str(val).strip().lower())
 
     negatives: list[tuple[int, int, int]] = []
-    seen_pairs = set()
+    seen_pairs: set[tuple[int, int]] = set()
 
     # Pre-create lookup dict for duplicate IDs (O(n) once instead of O(n²) lookups)
     dup_lookup = df.set_index(id_column)[column].to_dict()
@@ -206,7 +234,7 @@ def get_gold_standard_close_non_dupes(
 
         # Vectorized normalization - much faster than iterrows()
         # Create a copy with just the fields we need
-        df_subset = df[[id_column] + rule].copy()
+        df_subset = df[[id_column, *rule]].copy()
 
         # Normalize all fields at once
         for field in rule:
@@ -222,7 +250,7 @@ def get_gold_standard_close_non_dupes(
         # Group by block key - this is much faster than manual grouping
         for block_key, group in df_subset.groupby("block_key"):
             ids = group[id_column].tolist()
-            if len(ids) >= 2:
+            if len(ids) >= _MIN_BLOCK_SIZE:
                 blocks[block_key] = ids
 
         total_candidate_pairs = 0
@@ -230,31 +258,12 @@ def get_gold_standard_close_non_dupes(
 
         # Generate pairs within each block
         for block_ids in blocks.values():
-            for a, b in combinations(block_ids, 2):
-                total_candidate_pairs += 1
-                pair_id = tuple(sorted((a, b)))
-
-                # Skip if already seen
-                if pair_id in seen_pairs:
-                    continue
-
-                # Fast lookup instead of .loc (O(1) instead of O(n))
-                da = dup_lookup.get(a)
-                db = dup_lookup.get(b)
-
-                # Only keep if they have different duplicate IDs
-                is_valid_negative = False
-                if pd.notna(da) and pd.notna(db):
-                    if da != db:
-                        is_valid_negative = True
-                else:
-                    # At least one doesn't have a duplicate ID
-                    is_valid_negative = True
-
-                if is_valid_negative:
-                    valid_hard_negatives += 1
-                    negatives.append((a, b, 0))
-                    seen_pairs.add(pair_id)
+            new_pairs, candidates, valid = _generate_block_pairs(
+                block_ids, seen_pairs, dup_lookup
+            )
+            total_candidate_pairs += candidates
+            valid_hard_negatives += valid
+            negatives.extend(new_pairs)
 
         logger.info(
             f"Rule {tuple(rule)}: {total_candidate_pairs} candidate pairs, "
@@ -306,7 +315,7 @@ def get_all_pairs(
     # If sampling requested and total is large, sample unique pairs uniformly
     if sample and total_pairs > sample:
         logger.info(f"Sampling {sample} pairs from {total_pairs} total pairs")
-        pairs = []
+        pairs: list[tuple[int, int, int]] = []
         seen = set()
         while len(pairs) < sample:
             a, b = random.sample(ids, 2)
@@ -392,7 +401,7 @@ def compare_target_fields(
         if compare_method:
             try:
                 scores[field] = compare_method(record_a, record_b)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 scores[field] = None
                 logger.warning(f"compare_{field} failed: {e}")
         else:
@@ -442,7 +451,8 @@ def perform_deduplication_on_training_test_set_df(
     return pd.DataFrame(out)
 
 
-def train_dedup_model(df_training: pd.DataFrame):
+def train_dedup_model(df_training: pd.DataFrame) -> RandomForestClassifier:
+    """Train a Random Forest classifier for deduplication."""
     feature_cols = [
         "doi",
         "title",
@@ -454,65 +464,28 @@ def train_dedup_model(df_training: pd.DataFrame):
         "volume",
         "issue",
     ]
-    X = df_training[feature_cols].fillna(0)
+    x_features = df_training[feature_cols].fillna(0)
     y = df_training["label"]
 
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+    x_train, x_val, y_train, y_val = train_test_split(
+        x_features, y, test_size=0.2, random_state=42, stratify=y
     )
 
     clf = RandomForestClassifier(
         n_estimators=200, max_depth=None, random_state=42, class_weight="balanced"
     )
-    clf.fit(X_train, y_train)
+    clf.fit(x_train, y_train)
 
-    y_pred = clf.predict(X_val)
-    y_prob = clf.predict_proba(X_val)[:, 1]
+    y_pred = clf.predict(x_val)
+    y_prob = clf.predict_proba(x_val)[:, 1]
 
-    print("[info] Validation metrics:")
-    print(classification_report(y_val, y_pred))
-    print("Confusion Matrix:\n", confusion_matrix(y_val, y_pred))
-    print("ROC-AUC:", roc_auc_score(y_val, y_prob))
+    logger.info("Validation metrics:\n{}", classification_report(y_val, y_pred))
+    logger.info("Confusion Matrix:\n{}", confusion_matrix(y_val, y_pred))
+    logger.info("ROC-AUC: {}", roc_auc_score(y_val, y_prob))
 
-    # Feature importance
     feat_imp = pd.DataFrame(
         {"feature": feature_cols, "importance": clf.feature_importances_}
     ).sort_values("importance", ascending=False)
-    print("[info] Feature importance:\n", feat_imp)
+    logger.info("Feature importance:\n{}", feat_imp)
 
     return clf
-
-
-# # === 3. Predict duplicates for new candidate pairs ===
-# def predict_duplicate_probability(
-#     paper_a: Paper, paper_b: Paper, model, feature_cols=None
-# ):
-#     if feature_cols is None:
-#         feature_cols = [
-#             "doi",
-#             "title",
-#             "authors",
-#             "year",
-#             "journal",
-#             "pages",
-#             "abstract",
-#             "volume",
-#             "issue",
-#         ]
-#     deduper = Deduper(reference=paper_a, candidates=[paper_b])
-#     features = []
-#     for field in feature_cols:
-#         try:
-#             features.append(getattr(deduper, f"compare_{field}")(paper_a, paper_b))
-#         except:
-#             features.append(0.0)
-#     prob = model.predict_proba([features])[0, 1]
-#     return prob
-
-
-# # === Example usage ===
-# df_training = build_training_pairs_with_scores(papers, negative_ratio=2.0)
-# dedup_model = train_dedup_model(df_training)
-
-# # Predict on new pair
-# # prob = predict_duplicate_probability(paper1, paper2, model=dedup_model)
