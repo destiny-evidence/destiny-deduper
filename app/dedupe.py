@@ -450,7 +450,7 @@ class Deduper:
     ) -> str | None:
         """Return the early-stop reason string if the pair should be vetoed, else None."""
         ctx = ComparisonContext(
-            deduper=Deduper(),
+            deduper=self,
             record_a=record_a,
             record_b=record_b,
         )
