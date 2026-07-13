@@ -179,25 +179,3 @@ def extract_abstract_numbers(text: str) -> dict[str, int]:
     for token in tokens:
         result[token] = result.get(token, 0) + 1
     return result
-
-
-def strip_doi_punctuation(doi: str) -> str:
-    """
-    Strip . - _ from the DOI suffix for fuzzy comparison.
-
-    Handles common database artefacts such as a missing dot (100B3BJJ vs
-    100B3.BJJ) or underscore/hyphen substitution (eurrev_2018 vs
-    eurrev-2018).  Only the part after the first '/' is altered so the
-    registrant prefix (10.XXXX) is never affected.
-
-    Args:
-        doi: DOI string to process
-
-    Returns:
-        DOI string with punctuation stripped from suffix
-
-    """
-    if "/" not in doi:
-        return doi
-    prefix, suffix = doi.split("/", 1)
-    return prefix + "/" + re.sub(r"[-_.]", "", suffix)
