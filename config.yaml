@@ -2,8 +2,9 @@ thresholds:
   doi_partial_match: 0.90
 
   title:
-    veto: 0.80
-    similarity: 0.97
+    veto: 0.7
+    similarity: 0.95
+    similarity_lower: 0.75
     partial_match_ratio: 0.9
 
   author:
@@ -24,24 +25,24 @@ thresholds:
   strong_metadata_match: 0.97
   min_mismatches_for_veto: 2
 
-weights:
-  doi: 2.28
-  title: 6.38
-  authors: 2.44
-  year: 0.12
-  journal: 1.42
-  pages: 1.01
-  abstract: -0.29
-  volume: 0.38
-  issue: -0.22
-  intercept: -8.8
+# weights:
+#   doi: 2.28
+#   title: 6.38
+#   authors: 2.44
+#   year: 0.12
+#   journal: 1.42
+#   pages: 1.01
+#   abstract: -0.29
+#   volume: 0.38
+#   issue: -0.22
+#   intercept: -8.8
 
 patterns:
   html_tag: "<[^>]+>"
   non_alphanumeric: "[^a-z0-9\\s]"
   journal_punctuation: "[^\\w\\s]"
   part_number: "\\bpart\\s+(\\d+|[ivxlcdmIVXLCDM]+)\\b"
-  numeric_digits: "\d+(?:\.\d+)?"
+  numeric_digits: "\\d+(?:\\.\\d+)?"
 
 roman_numerals:
   i: 1
