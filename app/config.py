@@ -18,8 +18,9 @@ CONFIG_FILE_PATH = PROJECT_ROOT / "config.yaml"
 class TitleThresholds(BaseModel):
     """Thresholds for paper titles comparison similarities."""
 
-    veto: float = Field(default=0.80)
-    similarity: float = Field(default=0.97)
+    veto: float = Field(default=0.7)
+    similarity: float = Field(default=0.95)
+    similarity_lower: float = Field(default=0.75)
     partial_match_ratio: float = Field(default=0.9)
 
 
@@ -69,15 +70,15 @@ class ThresholdSettings(BaseModel):
 class WeightSettings(BaseModel):
     """Settings for weight to be applied to deduplication runs."""
 
-    doi: float = 2.28
-    title: float = 6.38
-    authors: float = 2.44
-    year: float = 0.12
-    journal: float = 1.42
-    pages: float = 1.01
-    abstract: float = -0.29
-    volume: float = 0.38
-    issue: float = -0.22
+    doi: float = 5.304259
+    title: float = 11.591445
+    authors: float = 3.704393
+    year: float = 2.646572
+    journal: float = 3.179915
+    pages: float = 3.791240
+    abstract: float = -0.364041
+    volume: float = -0.119415
+    issue: float = 1.153251
 
 
 class PatternSettings(BaseModel):
