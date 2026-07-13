@@ -24,6 +24,8 @@ from loguru import logger
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_extra_types.isbn import ISBN
 
+from app.normalisers import normalise_doi
+
 
 class Paper(BaseModel):
     """Data model for paper records used in deduplication."""
@@ -50,8 +52,10 @@ class Paper(BaseModel):
         Parse and normalize DOI field to DOIIdentifier object.
 
         Converts raw DOI strings from CSV/pandas to DOIIdentifier identity objects.
-        Handles pandas NaN values and empty strings. Non-string, non-DOIIdentifier
-        inputs return None. DOI parsing failures are logged as debug messages.
+        Handles pandas NaN values and empty strings. Applies DOI normalization
+        (URL prefix stripping, case folding, symbol decoding). Non-string,
+        non-DOIIdentifier inputs return None. DOI parsing failures are logged
+        as debug messages.
 
         Args:
             v: Raw DOI value (may be DOIIdentifier, string, float NaN, or None).
@@ -66,7 +70,7 @@ class Paper(BaseModel):
         if v is None or (isinstance(v, float) and math.isnan(v)):
             return None
         if isinstance(v, str):
-            doi = v.strip()
+            doi = normalise_doi(v)
             if not doi:
                 return None
             try:
@@ -125,6 +129,51 @@ class Paper(BaseModel):
 
         Returns:
             str | None: Cleaned string value, or None if missing or empty.
+
+        """
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            return v or None
+        return None
+
+    @field_validator("year", mode="before")
+    @classmethod
+    def parse_year(cls, v: float | None) -> int | None:
+        """
+        Parse year field, handling pandas NaN values.
+
+        Converts pandas NaN floats to None. Passes through valid ints unchanged.
+        This handles the case where pandas represents missing numeric values as
+        float('nan') rather than Python None.
+
+        Args:
+            v: Raw year value (int, float NaN, or None).
+
+        Returns:
+            int | None: Year as int, or None if missing or NaN.
+
+        """
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            return None
+        return v
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def parse_title(cls, v: str | float | None) -> str | None:
+        """
+        Parse title field, handling pandas NaN values.
+
+        Converts pandas NaN floats to None. Strips whitespace from strings.
+        This handles the case where pandas represents missing values as
+        float('nan') rather than Python None.
+
+        Args:
+            v: Raw title value (string, float NaN, or None).
+
+        Returns:
+            str | None: Title string (stripped), or None if missing or NaN.
 
         """
         if v is None or (isinstance(v, float) and math.isnan(v)):
@@ -217,16 +266,6 @@ class Paper(BaseModel):
                 )
                 authors_list.append(Authorship(display_name=a, position=position))
             return authors_list
-        return None
-
-    @classmethod
-    @field_validator("issn", mode="before")
-    def check_valid_issn(cls, v: str | None) -> str | None:
-        """Ensure issn (if present) is valid."""
-        if v:
-            issn_regex = re.compile(r"^[0-9]{4}-[0-9]{3}[0-9X]$.")
-            if issn_regex.match(v):
-                return v
         return None
 
     @model_validator(mode="after")
