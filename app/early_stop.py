@@ -23,7 +23,9 @@ AUTHOR_FIRST_CHARS = settings.thresholds.author.first_chars
 STRONG_METADATA_MATCH_THRESHOLD = settings.thresholds.strong_metadata_match
 AUTHORS_SIM_THRESHOLD = settings.thresholds.author.similarity
 JOURNAL_SIM_THRESHOLD = settings.thresholds.journal.similarity
-TITLE_VETO_THRESHOLD = settings.thresholds.title.similarity
+TITLE_SIM_THRESHOLD = settings.thresholds.title.similarity
+TITLE_VETO_THRESHOLD = settings.thresholds.title.veto
+TITLE_SIM_THRESHOLD_LOWER = settings.thresholds.title.similarity_lower
 
 
 class ComparisonContext(BaseModel):
@@ -185,26 +187,35 @@ def check_title_match_with_structural_conflict(ctx: ComparisonContext) -> bool:
 
 def check_title_and_metadata_mismatch(ctx: ComparisonContext) -> bool:
     """
-    Title+metadata veto:
-    require low title similarity and a mismatch in
-    pages, volume, or first author's first 20 chars
-    to treat as non-dupe.
+    Title + metadata veto.
 
+    Returns True (not a duplicate) if:
+      1. Title similarity is below TITLE_VETO_THRESHOLD, or
+      2. Title similarity is below TITLE_SIM_THRESHOLD and there are
+         enough metadata mismatches. If the title similarity is even lower
+         (below TITLE_SIM_THRESHOLD_LOWER), it counts as an additional
+         mismatch, making the veto easier to trigger.
     """
-    title_sim = ctx.deduper.compare_titles(ctx.record_a, ctx.record_b)
+    title_sim = ctx.deduper.compare_title(ctx.record_a, ctx.record_b)
+
+    # Extremely different titles -> definitely not duplicates.
     if title_sim < TITLE_VETO_THRESHOLD:
+        return True
+
+    if title_sim < TITLE_SIM_THRESHOLD:
         pages_mismatch = (
             ctx.record_a.pages is not None
             and ctx.record_b.pages is not None
             and ctx.record_a.pages != ctx.record_b.pages
         )
+
         volume_mismatch = (
             ctx.record_a.volume is not None
             and ctx.record_b.volume is not None
-            and ctx.record_a.pages != ctx.record_b.pages
+            and ctx.record_a.volume != ctx.record_b.volume
         )
 
-        # Check first author's first AUTHOR_FIRST_CHARS characters
+        # Check first author's first AUTHOR_FIRST_CHARS characters.
         first_author_mismatch = False
         if ctx.record_a.authors and ctx.record_b.authors:
             auth_a = getattr(ctx.record_a.authors[0], "author_name", None) or getattr(
@@ -213,13 +224,20 @@ def check_title_and_metadata_mismatch(ctx: ComparisonContext) -> bool:
             auth_b = getattr(ctx.record_b.authors[0], "author_name", None) or getattr(
                 ctx.record_b.authors[0], "display_name", ""
             )
+
             if auth_a and auth_b:
                 first_author_mismatch = (
                     auth_a[:AUTHOR_FIRST_CHARS] != auth_b[:AUTHOR_FIRST_CHARS]
                 )
 
         mismatch_count = sum([pages_mismatch, volume_mismatch, first_author_mismatch])
-        if mismatch_count >= MAX_MISMATCH_COUNT:
+
+        # If the titles are even less similar, treat that as one extra mismatch.
+        adjusted_mismatch_count = mismatch_count
+        if title_sim < TITLE_SIM_THRESHOLD_LOWER:
+            adjusted_mismatch_count += 1
+
+        if adjusted_mismatch_count >= MAX_MISMATCH_COUNT:
             mismatch_fields = [
                 f
                 for f, v in [
@@ -229,13 +247,17 @@ def check_title_and_metadata_mismatch(ctx: ComparisonContext) -> bool:
                 ]
                 if v
             ]
+
+            if title_sim < TITLE_SIM_THRESHOLD_LOWER:
+                mismatch_fields.append("very low title similarity")
+
             logger.debug(
-                "Early stop: title similarity %.3f below threshold %.2f with mismatches in: %s",
+                "Early stop: title similarity %.3f with mismatches in: %s",
                 title_sim,
-                TITLE_VETO_THRESHOLD,
                 ", ".join(mismatch_fields),
             )
             return True
+
     return False
 
 
@@ -257,7 +279,7 @@ def check_year_gap_abstract_numeric_mismatch(
     if abs(int(ctx.record_a.year) - int(ctx.record_b.year)) <= 1:
         return False
 
-    title_sim = ctx.deduper.compare_titles(ctx.record_a, ctx.record_b)
+    title_sim = ctx.deduper.compare_title(ctx.record_a, ctx.record_b)
     authors_sim = ctx.deduper.compare_authors(ctx.record_a, ctx.record_b)
     journal_sim = ctx.deduper.compare_journal(ctx.record_a, ctx.record_b)
 
@@ -284,6 +306,7 @@ EARLY_STOP_RULES = [
         reason="exact_title_with_structural_conflict",
         check=check_title_match_with_structural_conflict,
     ),
+    # remove
     EarlyStopRule(
         reason="title_with_metadata_mismatch", check=check_title_and_metadata_mismatch
     ),
