@@ -1,10 +1,12 @@
 """Functions and scaffolding for testing whether a pair fits early stopping rules."""
 
+from __future__ import annotations
+
 import re
 from collections.abc import Callable
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from rapidfuzz import fuzz
 
 from app.config import get_settings
@@ -30,12 +32,16 @@ TITLE_SIM_THRESHOLD_LOWER = settings.thresholds.title.similarity_lower
 
 class ComparisonContext(BaseModel):
     """
-    Comparison context, meaning we don't have to rewrite everything
-    that's already been defined as methods in Deduper (avoiding circular
-    imports).
+    Comparison context for early stopping rule evaluation.
+
+    Contains the deduper instance and the pair of records being compared,
+    allowing early stop rules to call comparison methods without circular
+    imports.
     """
 
-    deduper: Callable
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    deduper: Deduper
 
     record_a: Paper
     record_b: Paper
