@@ -29,7 +29,7 @@ settings = get_settings()
 
 # constants
 WEIGHTS = settings.weights.model_dump()
-INTERCEPT = WEIGHTS.get("intercept", -8.8)
+INTERCEPT = WEIGHTS.get("intercept", -18.686660)
 ABSTRACT_SIMILARITY_THRESHOLD = settings.thresholds.abstract.similarity
 JOURNAL_ABBREVIATION_THRESHOLD = settings.thresholds.journal.abbreviation
 
@@ -449,7 +449,11 @@ class Deduper:
         rules: list[EarlyStopRule] = EARLY_STOP_RULES,
     ) -> str | None:
         """Return the early-stop reason string if the pair should be vetoed, else None."""
-        ctx = ComparisonContext(deduper=Deduper(), record_a=record_a, record_b=record_b)
+        ctx = ComparisonContext(
+            deduper=Deduper(),
+            record_a=record_a,
+            record_b=record_b,
+        )
 
         for rule in rules:
             if rule.check(ctx):
@@ -642,7 +646,7 @@ class Deduper:
             authors_a, authors_b, string_distance_algorithm=algo
         )
 
-    def compare_titles(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_title(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
         Compare two titles using Levenshtein distance (case-insensitive),
         with special handling for alternative-language or subtitle segments.
@@ -684,6 +688,10 @@ class Deduper:
             return max(full_sim, seg_sim)
 
         return full_sim
+
+    def compare_titles(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+        """Backward-compatible alias for compare_title."""
+        return self.compare_title(record_a, record_b, **kwargs)
 
     def compare_year(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
