@@ -449,7 +449,7 @@ class Deduper:
         rules: list[EarlyStopRule] = EARLY_STOP_RULES,
     ) -> str | None:
         """Return the early-stop reason string if the pair should be vetoed, else None."""
-        ctx = ComparisonContext(
+        ctx = ComparisonContext.model_construct(
             deduper=self,
             record_a=record_a,
             record_b=record_b,

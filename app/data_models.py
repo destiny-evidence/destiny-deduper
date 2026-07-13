@@ -46,7 +46,8 @@ class Paper(BaseModel):
     @field_validator("doi", mode="before")
     @classmethod
     def parse_doi(cls, v: DOIIdentifier | str | float | None) -> DOIIdentifier | None:
-        """Parse and normalize DOI field to DOIIdentifier object.
+        """
+        Parse and normalize DOI field to DOIIdentifier object.
 
         Converts raw DOI strings from CSV/pandas to DOIIdentifier identity objects.
         Handles pandas NaN values and empty strings. Non-string, non-DOIIdentifier
@@ -58,6 +59,7 @@ class Paper(BaseModel):
         Returns:
             DOIIdentifier | None: Parsed DOI identity object, or None if missing,
                 unparseable, or empty.
+
         """
         if isinstance(v, DOIIdentifier):
             return v
@@ -80,7 +82,8 @@ class Paper(BaseModel):
     @field_validator("pages", mode="before")
     @classmethod
     def parse_pages(cls, v: str | float | None) -> str | None:
-        """Parse and clean pages field, handling pandas NaN and whitespace.
+        """
+        Parse and clean pages field, handling pandas NaN and whitespace.
 
         Strips whitespace and returns None for pandas NaN floats, None values,
         or empty strings. Preserves page range formats (e.g., '123-145').
@@ -90,6 +93,7 @@ class Paper(BaseModel):
 
         Returns:
             str | None: Cleaned pages string, or None if missing or empty.
+
         """
         if v is None or (isinstance(v, float) and math.isnan(v)):
             return None
@@ -99,11 +103,18 @@ class Paper(BaseModel):
         return None
 
     @field_validator(
-        "volume", "abstract", "issue", "journal", "publisher", "issn", mode="before"
+        "volume",
+        "abstract",
+        "issue",
+        "journal",
+        "publisher",
+        "issn",
+        mode="before",
     )
     @classmethod
     def parse_string_fields(cls, v: str | float | None) -> str | None:
-        """Parse and clean string fields from pandas data, handling NaN values.
+        """
+        Parse and clean string fields from pandas data, handling NaN values.
 
         Applies to volume, abstract, issue, journal, publisher, and issn fields.
         Converts pandas NaN floats to None, strips whitespace, and returns None
@@ -114,6 +125,7 @@ class Paper(BaseModel):
 
         Returns:
             str | None: Cleaned string value, or None if missing or empty.
+
         """
         if v is None or (isinstance(v, float) and math.isnan(v)):
             return None
@@ -125,7 +137,8 @@ class Paper(BaseModel):
     @field_validator("isbn", mode="before")
     @classmethod
     def parse_isbn(cls, v: str | float | None) -> str | None:
-        """Parse ISBN field, validating format and detecting ISSN misclassification.
+        """
+        Parse ISBN field, validating format and detecting ISSN misclassification.
 
         Accepts ISBN-10 and ISBN-13 formats (with or without hyphens). Rejects
         ISSN values incorrectly placed in ISBN column (pattern: XXXX-XXX[Xx]).
@@ -138,6 +151,7 @@ class Paper(BaseModel):
         Returns:
             str | None: Compact ISBN string (digits only, uppercase), or None
                 if invalid, missing, or ISSN.
+
         """
         if v is None or (isinstance(v, float) and math.isnan(v)):
             return None
@@ -161,7 +175,8 @@ class Paper(BaseModel):
     @field_validator("authors", mode="before")
     @classmethod
     def parse_authors(cls, v: str | float | None) -> list[Authorship] | None:
-        """Parse author string into list of Authorship objects with position tracking.
+        """
+        Parse author string into list of Authorship objects with position tracking.
 
         Splits comma and period-delimited author strings into individual authors,
         assigning AuthorPosition (FIRST, MIDDLE, LAST) based on order. Handles
@@ -175,6 +190,7 @@ class Paper(BaseModel):
         Returns:
             list[Authorship] | None: List of Authorship objects with display_name
                 and position, or None if missing or anonymous.
+
         """
         if isinstance(v, list):
             return v
@@ -250,9 +266,11 @@ def extract_identifiers(
 
 def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
     """
-    Extract relevant fields for `IncomingRecord`
-    from a destiny-sdk formatted `Reference` or
-    `ReferenceFileInput` object.
+    Extract relevant fields for `IncomingRecord` from destiny-sdk Reference.
+
+    Converts a destiny-sdk formatted `Reference` or `ReferenceFileInput` object
+    into a Paper model by extracting identifiers, bibliographic metadata, and
+    enhancement data.
     """
     id_map = extract_identifiers(ref.identifiers) if ref.identifiers else {}
 
@@ -308,7 +326,7 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
 
     journal = journal_bib if journal_bib is not None else journal_loc
 
-    # TODO: get pages -- where?
+    # Pages not currently available from destiny-sdk enhancements
     pages = None
 
     return Paper(
