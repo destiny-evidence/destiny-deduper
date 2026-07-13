@@ -142,15 +142,16 @@ class Paper(BaseModel):
 
         Accepts ISBN-10 and ISBN-13 formats (with or without hyphens). Rejects
         ISSN values incorrectly placed in ISBN column (pattern: XXXX-XXX[Xx]).
-        Returns None for invalid lengths, ISSN misclassifications, or invalid
-        ISBN-13 check digits.
+        Returns None for invalid lengths or ISSN misclassifications. Passes
+        compact ISBN string (digits only) to Pydantic's ISBN type for check
+        digit validation.
 
         Args:
             v: Raw ISBN value (string, float NaN, or other type).
 
         Returns:
-            str | None: Compact ISBN string (digits only, uppercase), or None
-                if invalid, missing, or ISSN.
+            str | None: Compact ISBN string (digits only), or None if invalid,
+                missing, or ISSN.
 
         """
         if v is None or (isinstance(v, float) and math.isnan(v)):
@@ -170,7 +171,7 @@ class Paper(BaseModel):
         if len(compact) not in (10, 13):
             return None
 
-        return raw
+        return compact.upper()
 
     @field_validator("authors", mode="before")
     @classmethod
@@ -241,6 +242,22 @@ class Paper(BaseModel):
             "Please supply at least one non-None value.",
         )
         raise ValueError(all_none_error)
+
+
+class GoldStandardPaper(Paper):
+    """
+    Paper model with gold-standard labels for model training and evaluation.
+
+    Extends base Paper model with recordid and duplicate_id fields for tracking
+    individual records and their duplicate groups in labeled datasets. Used when
+    training deduplication models or evaluating performance on ground-truth data.
+
+    Inherits all field validators from Paper for pandas NaN handling and
+    field normalization.
+    """
+
+    recordid: int | None = Field(default=None)
+    duplicate_id: int | None = Field(default=None, alias="duplicateid")
 
 
 def extract_identifiers(
