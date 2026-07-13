@@ -26,12 +26,7 @@ from pydantic_extra_types.isbn import ISBN
 
 
 class Paper(BaseModel):
-    """Data model for paper records used in deduplication.
-
-    Represents a single bibliographic record with metadata fields and identifiers.
-    Includes validators to handle pandas NaN values and normalize field inputs,
-    making it suitable for both API usage and direct CSV/dataframe parsing.
-    """
+    """Data model for paper records used in deduplication."""
 
     doi: DOIIdentifier | None = Field(default=None)
     openalex_id: OpenAlexIdentifier | None = Field(default=None)
