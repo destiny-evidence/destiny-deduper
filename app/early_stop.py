@@ -306,7 +306,6 @@ EARLY_STOP_RULES = [
         reason="exact_title_with_structural_conflict",
         check=check_title_match_with_structural_conflict,
     ),
-    # remove
     EarlyStopRule(
         reason="title_with_metadata_mismatch", check=check_title_and_metadata_mismatch
     ),
