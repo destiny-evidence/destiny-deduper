@@ -29,7 +29,7 @@ settings = get_settings()
 
 # constants
 WEIGHTS = settings.weights.model_dump()
-INTERCEPT = WEIGHTS.get("intercept", -18.686660)
+INTERCEPT = WEIGHTS.get("intercept", -18.688678)
 ABSTRACT_SIMILARITY_THRESHOLD = settings.thresholds.abstract.similarity
 JOURNAL_ABBREVIATION_THRESHOLD = settings.thresholds.journal.abbreviation
 
