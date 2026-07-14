@@ -7,17 +7,19 @@ comparison, and pair scoring with early-stop diagnostics.
 """
 
 import random
+import warnings
 from collections import Counter
 from pathlib import Path
 
 import pandas as pd
 from loguru import logger
-from pydantic import ValidationError
 from tqdm import tqdm
 
 from app.data_models import GoldStandardPaper, Paper
 from app.dedupe import Deduper
 from app.early_stop import EARLY_STOP_RULES, ComparisonContext
+from app.record_cache import build_record_cache
+from app.record_resolution import record_level_metrics_for_threshold
 
 SEED = 1234
 DEDUPE_FIELDS = [
@@ -33,6 +35,15 @@ DEDUPE_FIELDS = [
 ]
 
 random.seed(SEED)
+
+__all__ = [
+    "DEDUPE_FIELDS",
+    "build_record_cache",
+    "compare_target_fields",
+    "read_process_data_from_file",
+    "record_level_metrics_for_threshold",
+    "score_pairs_with_early_stop",
+]
 
 
 def read_process_data_from_file(
@@ -53,6 +64,9 @@ def read_process_data_from_file(
     """
     Load and preprocess tabular reference data from CSV file.
 
+    Deprecated: Prefer app.import_references.load_reference_csv with CsvLoadConfig
+    for new code paths and notebook workflows.
+
     Reads CSV file, lowercases all column names, drops specified columns,
     and renames common field aliases (author → authors, number → issue).
 
@@ -68,56 +82,18 @@ def read_process_data_from_file(
             selected columns. All column names are lowercase.
 
     """
+    warnings.warn(
+        "read_process_data_from_file is deprecated. "
+        "Use app.import_references.load_reference_csv instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     refdata = pd.read_csv(filepath, **kwargs)
     refdata.columns = [col.lower() for col in refdata.columns]
     final_cols = [col for col in refdata.columns if col not in cols_to_drop]
     refdata = refdata[final_cols]
     return refdata.rename(columns={"number": "issue", "author": "authors"})
-
-
-def build_record_cache(
-    df: pd.DataFrame,
-    id_column: str = "recordid",
-    include_ids: set[int] | None = None,
-) -> tuple[dict[int, GoldStandardPaper], int]:
-    """
-    Parse and validate records into GoldStandardPaper objects with error tracking.
-
-    Converts each DataFrame row to a GoldStandardPaper via Pydantic validation.
-    Records that fail validation are skipped. Useful for pipeline quality
-    assurance and identifying malformed input data.
-
-    Args:
-        df: DataFrame with records to parse. Must include id_column.
-        id_column: Column name for record IDs (default "recordid").
-        include_ids: Optional set of IDs to include. If provided, only records
-            with IDs in this set are added to cache. If None, all records
-            (with valid IDs) are included.
-
-    Returns:
-        tuple of:
-            - dict[int, GoldStandardPaper]: ID → validated record mapping.
-            - int: Count of records that failed Pydantic validation.
-
-    """
-    cache: dict[int, GoldStandardPaper] = {}
-    validation_errors = 0
-
-    for record in df.to_dict(orient="records"):
-        record_id = record.get(id_column)
-        if record_id is None or pd.isna(record_id):
-            continue
-
-        parsed_id = int(record_id)
-        if include_ids is not None and parsed_id not in include_ids:
-            continue
-
-        try:
-            cache[parsed_id] = GoldStandardPaper(**record)
-        except ValidationError:
-            validation_errors += 1
-
-    return cache, validation_errors
 
 
 def compare_target_fields(

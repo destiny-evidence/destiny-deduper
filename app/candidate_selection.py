@@ -68,17 +68,18 @@ def build_blocked_pairs(
     df: pd.DataFrame,
     block_rules: list[list[str]] = BLOCK_RULES,
     id_column: str = "recordid",
-    dup_column: str = "duplicateid",
+    dup_column: str | None = "duplicateid",
     *,
     include_block_rules: bool = False,
 ) -> pd.DataFrame:
     """
-    Generate candidate record pairs using blocking rules with duplicate labels.
+    Generate candidate record pairs using blocking rules.
 
     Groups records by normalized field values according to blocking rules.
-    Within each group, creates all pairs and labels them as duplicates if both
-    records share the same duplicate_id (for gold-standard datasets). Removes
-    duplicate pairs and filters groups smaller than 2 records.
+    Within each group, creates all pairs and, when duplicate labels are
+    available, marks them as duplicates if both records share the same
+    duplicate_id. Removes duplicate pairs and filters groups smaller than 2
+    records.
 
     Args:
         df: DataFrame with records and duplicate labels.
@@ -86,19 +87,21 @@ def build_blocked_pairs(
             Each rule is a list of field names; records are grouped by
             normalized values of those fields.
         id_column: Column name for record IDs (default "recordid").
-        dup_column: Column name for duplicate group IDs (default "duplicateid").
+        dup_column: Column name for duplicate group IDs. Set to None for
+            non-gold-standard datasets where duplicate labels are unavailable.
         include_block_rules: If True, add 'block_rules' column showing which
             rules generated each pair. Defaults to False.
 
     Returns:
-        pd.DataFrame: Columns are [id_a, id_b, is_dupe] (and optionally
-            block_rules). Each row is a unique candidate pair with is_dupe=1
-            if records share a duplicate_id, else 0. Ordered by (id_a, id_b).
+        pd.DataFrame: Columns are [id_a, id_b] for unlabeled datasets, or
+            [id_a, id_b, is_dupe] when dup_column is provided. May also include
+            block_rules. Rows are unique candidate pairs ordered by discovery.
 
     """
-    dup_lookup = df.set_index(id_column)[dup_column].to_dict()
+    include_labels = dup_column is not None
+    dup_lookup = df.set_index(id_column)[dup_column].to_dict() if include_labels else {}
     seen: set[tuple[int, int]] = set()
-    rows: list[tuple[int, int, int]] = []
+    rows: list[tuple[int, int] | tuple[int, int, int]] = []
     pair_rules: dict[tuple[int, int], set[str]] = {}
 
     for rule in block_rules:
@@ -132,13 +135,19 @@ def build_blocked_pairs(
                 if key in seen:
                     continue
 
-                dup_a = dup_lookup.get(id_a)
-                dup_b = dup_lookup.get(id_b)
-                is_dupe = int(pd.notna(dup_a) and pd.notna(dup_b) and dup_a == dup_b)
-                rows.append((id_a, id_b, is_dupe))
+                if include_labels:
+                    dup_a = dup_lookup.get(id_a)
+                    dup_b = dup_lookup.get(id_b)
+                    is_dupe = int(
+                        pd.notna(dup_a) and pd.notna(dup_b) and dup_a == dup_b
+                    )
+                    rows.append((id_a, id_b, is_dupe))
+                else:
+                    rows.append((id_a, id_b))
                 seen.add(key)
 
-    pairs_df = pd.DataFrame(rows, columns=["id_a", "id_b", "is_dupe"])
+    columns = ["id_a", "id_b", "is_dupe"] if include_labels else ["id_a", "id_b"]
+    pairs_df = pd.DataFrame(rows, columns=columns)
     if include_block_rules and not pairs_df.empty:
         pairs_df["block_rules"] = pairs_df.apply(
             lambda r: " | ".join(
