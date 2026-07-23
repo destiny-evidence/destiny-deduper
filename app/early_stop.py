@@ -2,17 +2,14 @@
 
 import re
 from collections.abc import Callable
-from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict
 from rapidfuzz import fuzz
 
-if TYPE_CHECKING:
-    from app.data_models import Paper
-    from app.dedupe import Deduper
-
 from app.config import get_settings
+from app.data_models import Paper
+from app.dedupe import Deduper
 from app.normalisers import normalise_doi, normalise_part_number
 from app.regexes import PART_NUMBER_RE
 from app.utils import clean_title_for_partial_ratio
