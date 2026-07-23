@@ -184,3 +184,63 @@ languages:
   - "samoan"
   - "tongan"
   - "hawaiian"
+
+csv_import:
+  default_columns:
+    - doi
+    - title
+    - authors
+    - year
+    - journal
+    - pages
+    - abstract
+    - issue
+    - volume
+    - recordid
+
+  gold_standard_columns:
+    - duplicateid
+
+  supported_encodings:
+    - utf-8
+    - utf-8-sig
+    - cp1252
+    - latin1
+
+  column_aliases:
+    doi:
+      - doi
+
+    title:
+      - title
+
+    authors:
+      - authors
+      - author
+
+    year:
+      - year
+
+    journal:
+      - journal
+
+    pages:
+      - pages
+
+    abstract:
+      - abstract
+
+    issue:
+      - issue
+      - number
+
+    volume:
+      - volume
+
+    recordid:
+      - record_id
+      - recordid
+
+    duplicateid:
+      - duplicate_id
+      - duplicateid

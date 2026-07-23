@@ -6,40 +6,17 @@ from pathlib import Path
 import pandas as pd
 from pydantic import BaseModel, Field
 
-DEFAULT_COLUMNS: tuple[str, ...] = (
-    "doi",
-    "title",
-    "authors",
-    "year",
-    "journal",
-    "pages",
-    "abstract",
-    "issue",
-    "volume",
-    "recordid",
-)
+from app.config import CsvImportSettings, get_settings
 
-GOLD_STANDARD_COLUMNS: tuple[str, ...] = ("duplicateid",)
+settings = get_settings()
+csv_import_settings: CsvImportSettings = settings.csv_import
 
-SUPPORTED_ENCODINGS: tuple[str, ...] = (
-    "utf-8",
-    "utf-8-sig",
-    "cp1252",
-    "latin1",
-)
-
+DEFAULT_COLUMNS: tuple[str, ...] = csv_import_settings.default_columns
+GOLD_STANDARD_COLUMNS: tuple[str, ...] = csv_import_settings.gold_standard_columns
+SUPPORTED_ENCODINGS: tuple[str, ...] = csv_import_settings.supported_encodings
 COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
-    "doi": ("doi",),
-    "title": ("title",),
-    "authors": ("authors", "author"),
-    "year": ("year",),
-    "journal": ("journal",),
-    "pages": ("pages",),
-    "abstract": ("abstract",),
-    "issue": ("issue", "number"),
-    "volume": ("volume",),
-    "recordid": ("record_id", "recordid"),
-    "duplicateid": ("duplicate_id", "duplicateid"),
+    field_name: tuple(aliases)
+    for field_name, aliases in csv_import_settings.column_aliases.model_dump().items()
 }
 
 
