@@ -16,7 +16,7 @@ CONFIG_FILE_PATH = PROJECT_ROOT / "config.yaml"
 
 
 class TitleThresholds(BaseModel):
-    """Thresholds for paper titles comparison similarities."""
+    """Thresholds for paper title similarity comparisons."""
 
     veto: float
     similarity: float
@@ -57,18 +57,18 @@ class ThresholdSettings(BaseModel):
     doi_partial_match: float
     partial_title_match: float
 
-    title: TitleThresholds = Field(default_factory=TitleThresholds)
-    author: AuthorThresholds = Field(default_factory=AuthorThresholds)
-    journal: JournalThresholds = Field(default_factory=JournalThresholds)
-    abstract: AbstractThresholds = Field(default_factory=AbstractThresholds)
-    paper: PaperThresholds = Field(default_factory=PaperThresholds)
+    title: TitleThresholds
+    author: AuthorThresholds
+    journal: JournalThresholds
+    abstract: AbstractThresholds
+    paper: PaperThresholds
 
-    strong_metadata_match: float = Field(default=0.97)
-    min_mismatches_for_veto: int = Field(default=2)
+    strong_metadata_match: float
+    min_mismatches_for_veto: int
 
 
 class WeightSettings(BaseModel):
-    """Settings for weight to be applied to deduplication runs."""
+    """Weights applied during deduplication scoring."""
 
     doi: float
     title: float
@@ -83,7 +83,7 @@ class WeightSettings(BaseModel):
 
 
 class PatternSettings(BaseModel):
-    """Pattern settings."""
+    """Regular-expression pattern settings."""
 
     html_tag: str
     non_alphanumeric: str
@@ -92,7 +92,7 @@ class PatternSettings(BaseModel):
 
 
 class StopwordSettings(BaseModel):
-    """Stopwords."""
+    """Configured stopword lists."""
 
     title: list[str]
     journal: list[str]
@@ -115,7 +115,7 @@ class CsvColumnAliases(BaseModel):
 
 
 class CsvImportSettings(BaseModel):
-    """Field names used when importing reference CSV files."""
+    """Settings used when importing reference CSV files."""
 
     default_columns: tuple[str, ...] = (
         "doi",
@@ -143,10 +143,10 @@ class CsvImportSettings(BaseModel):
 
 
 class Settings(BaseSettings):
-    """Combined settings class, to be imported elsewhere to access these values."""
+    """Top-level application settings loaded from YAML."""
 
-    thresholds: ThresholdSettings = Field(default_factory=ThresholdSettings)
-    weights: WeightSettings = Field(default_factory=WeightSettings)
+    thresholds: ThresholdSettings
+    weights: WeightSettings
     patterns: PatternSettings
     roman_numerals: dict[str, int]
     stopwords: StopwordSettings
@@ -168,17 +168,17 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        """Get the settings to read from yaml."""
+        """Configure YAML and other settings sources."""
         return (
-            YamlConfigSettingsSource(settings_cls),
             init_settings,
             env_settings,
             dotenv_settings,
+            YamlConfigSettingsSource(settings_cls),
             file_secret_settings,
         )
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return a cached settings instance."""
+    """Return the cached application settings."""
     return Settings()
