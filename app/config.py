@@ -18,44 +18,44 @@ CONFIG_FILE_PATH = PROJECT_ROOT / "config.yaml"
 class TitleThresholds(BaseModel):
     """Thresholds for paper titles comparison similarities."""
 
-    veto: float = Field(default=0.7)
-    similarity: float = Field(default=0.95)
-    similarity_lower: float = Field(default=0.75)
-    partial_match_ratio: float = Field(default=0.9)
+    veto: float
+    similarity: float
+    similarity_lower: float
+    partial_match_ratio: float
 
 
 class AuthorThresholds(BaseModel):
     """Threshold for author comparisons."""
 
-    similarity: float = Field(default=0.92)
-    first_chars: int = Field(default=7)
+    similarity: float
+    first_chars: int
 
 
 class JournalThresholds(BaseModel):
     """Threshold for journal-related comparisons."""
 
-    similarity: float = Field(default=0.70)
-    strong_similarity: float = Field(default=0.92)
-    abbreviation: float = Field(default=0.70)
+    similarity: float
+    strong_similarity: float
+    abbreviation: float
 
 
 class AbstractThresholds(BaseModel):
     """Threshold for abstract comparisons."""
 
-    similarity: float = Field(default=0.70)
+    similarity: float
 
 
 class PaperThresholds(BaseModel):
     """Threshold for paper comparisons."""
 
-    match: float = Field(default=0.90)
+    match: float
 
 
 class ThresholdSettings(BaseModel):
     """Combined threshold settings."""
 
-    doi_partial_match: float = Field(default=0.90)
-    partial_title_match: float = Field(default=0.90)
+    doi_partial_match: float
+    partial_title_match: float
 
     title: TitleThresholds = Field(default_factory=TitleThresholds)
     author: AuthorThresholds = Field(default_factory=AuthorThresholds)
@@ -70,15 +70,16 @@ class ThresholdSettings(BaseModel):
 class WeightSettings(BaseModel):
     """Settings for weight to be applied to deduplication runs."""
 
-    doi: float = 5.304259
-    title: float = 11.591445
-    authors: float = 3.704393
-    year: float = 2.646572
-    journal: float = 3.179915
-    pages: float = 3.791240
-    # abstract: float = -0.364041
-    # volume: float = -0.119415
-    issue: float = 1.153251
+    doi: float
+    title: float
+    authors: float
+    year: float
+    journal: float
+    pages: float
+    issue: float
+    intercept: float
+    abstract: float | None = None
+    volume: float | None = None
 
 
 class PatternSettings(BaseModel):
