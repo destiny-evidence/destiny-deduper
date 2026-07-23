@@ -99,6 +99,8 @@ class StopwordSettings(BaseModel):
 
 
 class CsvColumnAliases(BaseModel):
+    """Supported aliases for canonical CSV column names."""
+
     doi: tuple[str, ...] = ("doi",)
     title: tuple[str, ...] = ("title",)
     authors: tuple[str, ...] = ("authors", "author")
@@ -113,6 +115,8 @@ class CsvColumnAliases(BaseModel):
 
 
 class CsvImportSettings(BaseModel):
+    """Field names used when importing reference CSV files."""
+
     default_columns: tuple[str, ...] = (
         "doi",
         "title",
