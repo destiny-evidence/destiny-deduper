@@ -157,7 +157,7 @@ class Paper(BaseModel):
         """
         if v is None or (isinstance(v, float) and math.isnan(v)):
             return None
-        return v
+        return int(v)
 
     @field_validator("title", mode="before")
     @classmethod

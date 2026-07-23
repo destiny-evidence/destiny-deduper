@@ -76,8 +76,8 @@ class WeightSettings(BaseModel):
     year: float = 2.646572
     journal: float = 3.179915
     pages: float = 3.791240
-    # abstract: float = -0.364041
-    # volume: float = -0.119415
+    # abstract: float = -0.364041  # noqa: ERA001
+    # volume: float = -0.119415  # noqa: ERA001
     issue: float = 1.153251
 
 

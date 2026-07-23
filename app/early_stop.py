@@ -9,8 +9,8 @@ from pydantic import BaseModel, ConfigDict
 from rapidfuzz import fuzz
 
 if TYPE_CHECKING:
-    from app.data_models import Paper
-    from app.dedupe import Deduper
+    from app.data_models import Paper  # noqa: TC004
+    from app.dedupe import Deduper  # noqa: TC004
 
 from app.config import get_settings
 from app.normalisers import normalise_doi, normalise_part_number
