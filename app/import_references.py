@@ -1,7 +1,5 @@
 """Module for handling import references and data processing."""
 
-from __future__ import annotations
-
 from collections.abc import Sequence
 from pathlib import Path
 
