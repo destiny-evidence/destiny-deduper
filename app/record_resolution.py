@@ -12,8 +12,6 @@ Column naming note:
     relevant ``*_column`` arguments explicitly.
 """
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
