@@ -132,7 +132,7 @@ class Deduper:
         logger.debug(f"scores for each field: {scores}")
         return sum(scores.values()) / len(scores)
 
-    def score_pair(  # noqa: PLR0913, PLR0917
+    def score_pair(
         self,
         record_a: Paper,
         record_b: Paper,
@@ -485,10 +485,8 @@ class Deduper:
         return nums_a != nums_b
 
     @staticmethod
-    def _normalise_doi(doi: str | None) -> str | None:
+    def _normalise_doi(doi: str) -> str | None:
         """Normalize DOI format to consistent lowercase, remove prefixes, decode symbols."""
-        if doi is None:
-            return None
         return normalise_doi(doi)
 
     def compare_doi(
@@ -619,22 +617,14 @@ class Deduper:
         try:
             authors_a = ", ".join(
                 [
-                    str(
-                        getattr(a, "author_name", None)
-                        or getattr(a, "display_name", None)
-                        or ""
-                    )
+                    getattr(a, "author_name", None) or getattr(a, "display_name", "")
                     for a in record_a.authors
                     if a is not None
                 ]
             )
             authors_b = ", ".join(
                 [
-                    str(
-                        getattr(a, "author_name", None)
-                        or getattr(a, "display_name", None)
-                        or ""
-                    )
+                    getattr(a, "author_name", None) or getattr(a, "display_name", "")
                     for a in record_b.authors
                     if a is not None
                 ]
@@ -796,7 +786,7 @@ class Deduper:
         return float(pages_a == pages_b)
 
     @staticmethod
-    def _normalise_pages(pages: str) -> str | None:
+    def _normalise_pages(pages: str) -> str:
         """Normalise page strings so style variants compare consistently."""
         return normalise_pages(str(pages))
 

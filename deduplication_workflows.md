@@ -56,9 +56,7 @@ THRESHOLD = 0.85
 # load references from csv
 df = load_reference_csv(
     "notebooks/data/diabetes_data.csv",
-    CsvLoadConfig(
-        columns=DEFAULT_COLUMNS, include_gold_standard=False
-    ),  # no duplicateid column
+    CsvLoadConfig(columns=DEFAULT_COLUMNS, include_gold_standard=False), #no duplicateid column
 )
 
 # build a dataset of candidate pairs using inbuilt block rules
@@ -66,7 +64,7 @@ pairs_df = build_blocked_pairs(
     df,
     block_rules=BLOCK_RULES,
     id_column="recordid",
-    dup_column=None,  # no column to indicate whether pairs are duplicates or not
+    dup_column=None, #no column to indicate whether pairs are duplicates or not 
 )
 
 # build a record cache, checking that references pass validation checks and are ready for scoring
@@ -131,9 +129,7 @@ Retention strategy options for `remove_duplicates`:
 1. Probability-only mode (default):
 
 ```python
-probability = deduper.dedupe_weighted(
-    rec_a, rec_b, weights=WEIGHTS, intercept=INTERCEPT
-)
+probability = deduper.dedupe_weighted(rec_a, rec_b, weights=WEIGHTS, intercept=INTERCEPT)
 ```
 
 2. Detailed mode:
@@ -202,20 +198,18 @@ THRESHOLD = 0.85
 # load references
 df = load_reference_csv(
     "notebooks/data/srsr_data.csv",
-    CsvLoadConfig(
-        columns=("recordid", *DEFAULT_COLUMNS), include_gold_standard=True
-    ),  # include gold standard columns (e.g. duplicateid)
+    CsvLoadConfig(columns=("recordid", *DEFAULT_COLUMNS), include_gold_standard=True), #include gold standard columns (e.g. duplicateid)
 )
 
-# build dataframe of candidate pairs
+# build dataframe of candidate pairs 
 pairs_df = build_blocked_pairs(
     df,
     block_rules=BLOCK_RULES,
     id_column="recordid",
-    dup_column="duplicateid",  # pass duplicateid column
+    dup_column="duplicateid", #pass duplicateid column
 )
 
-# build a record cache
+# build a record cache 
 sample_ids = set(pairs_df["id_a"]).union(pairs_df["id_b"])
 record_cache, validation_errors = build_record_cache(
     df,
@@ -240,7 +234,7 @@ for row in pairs_df.itertuples(index=False):
         rec_b,
         weights=WEIGHTS,
         intercept=INTERCEPT,
-        return_details=True,  # return full details rather than just dupe/non-dupe output for more detailed evaluation
+        return_details=True, #return full details rather than just dupe/non-dupe output for more detailed evaluation 
     )
 
     rows.append(
@@ -257,7 +251,7 @@ for row in pairs_df.itertuples(index=False):
 scored_df = pd.DataFrame(rows)
 scored_df["is_predicted_duplicate"] = scored_df["prob"] > THRESHOLD
 
-# explore record level metrics to determine how deduplication performed on your dataset
+# explore record level metrics to determine how deduplication performed on your dataset 
 record_metrics = record_level_metrics_for_threshold(
     df_orig=df,
     scored_pairs_df=scored_df,

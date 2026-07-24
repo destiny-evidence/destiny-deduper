@@ -11,8 +11,8 @@ dev = [
 
 [project]
 authors = [
-    {email = "k.hair@ucl.ac.uk", name = "Kaitlyn Hair"},
-    {email = "n.loynes@ucl.ac.uk", name = "Nik Loynes"},
+    "Kaitlyn Hair <k.hair@ucl.ac.uk>",
+    "Nik Loynes <n.loynes@ucl.ac.uk>",
 ]
 dependencies = [
     "destiny-sdk>=0.2.2",
@@ -57,7 +57,6 @@ lint.ignore = [
     "ANN003", # kwargs type annotation required
     "ARG002", # kwargs unused
     "COM812", # trailing commas (ruff-format recommended)
-    "CPY001", # missing copyright notice
     "D104", # module docstring
     "D203", # no-blank-line-before-class
     "D205", # missing-blank-line-after-summary
@@ -71,36 +70,7 @@ lint.ignore = [
     "TD002", # name for TO DO
     "TD003", # pedantic issue number requester in to dos
 ]
-lint.per-file-ignores = {"notebooks/*.ipynb" = [
-    "ANN001", # type annotations not required in notebooks
-    "ANN201", # return type not required in notebooks
-    "ANN202", # return type not required in notebooks
-    "B018", # useless expression (common in notebooks for output)
-    "B905", # zip without strict
-    "D103", # docstrings not required in notebooks
-    "E402", # imports at top of cell
-    "EM101", # exception string literals
-    "EM102", # exception f-string literals
-    "ERA001", # commented-out code
-    "F403", # star imports common in notebooks
-    "F405", # star import names
-    "FBT003", # boolean positional argument
-    "N806", # variable name case
-    "NPY002", # legacy numpy random
-    "PD011", # use to_numpy
-    "PD901", # avoid df variable name
-    "PLR0911", # too many return statements
-    "PLR2004", # magic values
-    "PLW0108", # class variable shadows
-    "PLW2901", # loop variable redefined
-    "PTH103", # use pathlib
-    "PTH120", # use pathlib
-    "PTH123", # use pathlib
-    "RET504", # unnecessary assignment
-    "RUF005", # collection literal concatenation
-    "T201", # print statements common in notebooks
-    "TRY003", # long exception messages
-], "tests*" = [
+lint.per-file-ignores = {"tests*" = [
     "ANN001", # No return type annotation
     "ANN201", # No return type annotation
     "ARG001", # Unused function argument

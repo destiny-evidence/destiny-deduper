@@ -12,8 +12,10 @@ Column naming note:
     relevant ``*_column`` arguments explicitly.
 """
 
-from collections.abc import Iterable
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 import pandas as pd
 
@@ -252,7 +254,7 @@ def remove_duplicates(  # noqa: PLR0913
     return deduplicated_df, removed_df, decisions_df
 
 
-def record_level_metrics_for_threshold(  # noqa: PLR0913, PLR0917
+def record_level_metrics_for_threshold(  # noqa: PLR0913
     df_orig: pd.DataFrame,
     scored_pairs_df: pd.DataFrame,
     threshold: float,
