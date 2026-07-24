@@ -1,7 +1,8 @@
 """Functions and scaffolding for testing whether a pair fits early stopping rules."""
 
+from __future__ import annotations
+
 import re
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -9,6 +10,8 @@ from pydantic import BaseModel, ConfigDict
 from rapidfuzz import fuzz
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from app.data_models import Paper
     from app.dedupe import Deduper
 
