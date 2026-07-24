@@ -1,6 +1,8 @@
 """Deduplication workflow, in main class `Deduper` with various algorithms."""
 
 import re
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from enum import StrEnum, auto
 from math import exp
 from typing import Literal
@@ -29,7 +31,7 @@ settings = get_settings()
 
 # constants
 WEIGHTS = settings.weights.model_dump()
-INTERCEPT = WEIGHTS.get("intercept")
+INTERCEPT: float = settings.weights.intercept
 ABSTRACT_SIMILARITY_THRESHOLD = settings.thresholds.abstract.similarity
 JOURNAL_ABBREVIATION_THRESHOLD = settings.thresholds.journal.abbreviation
 
@@ -46,6 +48,16 @@ class StringDistanceAlgorithm(StrEnum):
 
     JARO_WINKLER = auto()
     LEVENSHTEIN = auto()
+
+
+@dataclass(frozen=True)
+class ScorePairConfig:
+    """Configuration for scoring a pair of papers."""
+
+    string_distance_algorithm: StringDistanceAlgorithm | None = None
+    weights: dict[str, float] = dataclass_field(default_factory=lambda: WEIGHTS.copy())
+    intercept: float = INTERCEPT
+    fields: list[str] | None = None
 
 
 class Deduper:
@@ -136,10 +148,7 @@ class Deduper:
         self,
         record_a: Paper,
         record_b: Paper,
-        string_distance_algorithm: StringDistanceAlgorithm | None = None,
-        weights: dict[str, float] = WEIGHTS,
-        intercept: float = INTERCEPT,
-        fields: list[str] | None = None,
+        config: ScorePairConfig | None = None,
         **kwargs,
     ) -> tuple[float, dict[str, float], str | None]:
         """
@@ -159,6 +168,14 @@ class Deduper:
                    early_stop_reason is None if no early stop triggered.
 
         """
+        config = config or ScorePairConfig()
+
+        string_distance_algorithm = (
+            config.string_distance_algorithm or self.default_string_distance_algorithm
+        )
+        weights = config.weights
+        intercept = config.intercept
+        fields = config.fields
         if string_distance_algorithm is None:
             string_distance_algorithm = self.default_string_distance_algorithm
 
@@ -213,8 +230,8 @@ class Deduper:
         doi_b = getattr(record_b, "doi", None)
         penalty_factor = 1.0
         if doi_a is not None and doi_b is not None:
-            norm_a = Deduper._normalise_doi(getattr(doi_a, "identifier", None))
-            norm_b = Deduper._normalise_doi(getattr(doi_b, "identifier", None))
+            norm_a = normalise_doi(getattr(doi_a, "identifier", None))
+            norm_b = normalise_doi(getattr(doi_b, "identifier", None))
             if norm_a and norm_b and norm_a != norm_b:
                 penalty_factor = 0.9
                 logger.debug(
@@ -433,8 +450,8 @@ class Deduper:
         doi_b = getattr(record_b, "doi", None)
         penalty_factor = 1.0
         if doi_a is not None and doi_b is not None:
-            norm_a = Deduper._normalise_doi(getattr(doi_a, "identifier", None))
-            norm_b = Deduper._normalise_doi(getattr(doi_b, "identifier", None))
+            norm_a = normalise_doi(getattr(doi_a, "identifier", None))
+            norm_b = normalise_doi(getattr(doi_b, "identifier", None))
             if norm_a and norm_b and norm_a != norm_b:
                 penalty_factor = 0.9
                 logger.debug(
@@ -484,11 +501,6 @@ class Deduper:
 
         return nums_a != nums_b
 
-    @staticmethod
-    def _normalise_doi(doi: str) -> str | None:
-        """Normalize DOI format to consistent lowercase, remove prefixes, decode symbols."""
-        return normalise_doi(doi)
-
     def compare_doi(
         self,
         record_a: Paper,
@@ -502,8 +514,8 @@ class Deduper:
             float: 1.0 if DOIs match, 0.0 otherwise
 
         """
-        doi_a = Deduper._normalise_doi(getattr(record_a.doi, "identifier", None))
-        doi_b = Deduper._normalise_doi(getattr(record_b.doi, "identifier", None))
+        doi_a = normalise_doi(getattr(record_a.doi, "identifier", None))
+        doi_b = normalise_doi(getattr(record_b.doi, "identifier", None))
 
         if not doi_a or not doi_b:
             return 0.0
@@ -617,14 +629,20 @@ class Deduper:
         try:
             authors_a = ", ".join(
                 [
-                    getattr(a, "author_name", None) or getattr(a, "display_name", "")
+                    str(
+                        getattr(a, "author_name", None)
+                        or getattr(a, "display_name", "")
+                    )
                     for a in record_a.authors
                     if a is not None
                 ]
             )
             authors_b = ", ".join(
                 [
-                    getattr(a, "author_name", None) or getattr(a, "display_name", "")
+                    str(
+                        getattr(a, "author_name", None)
+                        or getattr(a, "display_name", "")
+                    )
                     for a in record_b.authors
                     if a is not None
                 ]
@@ -781,14 +799,9 @@ class Deduper:
         if record_a.pages is None or record_b.pages is None:
             return 0.0
 
-        pages_a = Deduper._normalise_pages(record_a.pages)
-        pages_b = Deduper._normalise_pages(record_b.pages)
+        pages_a = normalise_pages(record_a.pages)
+        pages_b = normalise_pages(record_b.pages)
         return float(pages_a == pages_b)
-
-    @staticmethod
-    def _normalise_pages(pages: str) -> str:
-        """Normalise page strings so style variants compare consistently."""
-        return normalise_pages(str(pages))
 
     def compare_abstract(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
