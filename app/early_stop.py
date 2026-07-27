@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -10,8 +11,6 @@ from pydantic import BaseModel, ConfigDict
 from rapidfuzz import fuzz
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from app.data_models import Paper
     from app.dedupe import Deduper
 
@@ -21,6 +20,7 @@ from app.regexes import PART_NUMBER_RE
 from app.utils import clean_title_for_partial_ratio
 
 settings = get_settings()
+
 
 PARTIAL_TITLE_MATCH_RATIO = settings.thresholds.title.partial_match_ratio
 JOURNAL_MISMATCH_THRESHOLD = settings.thresholds.journal.similarity

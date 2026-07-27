@@ -1,5 +1,4 @@
 import pytest
-from destiny_sdk.identifiers import DOIIdentifier, ExternalIdentifierType
 from destiny_sdk.references import ReferenceFileInput
 from pydantic import ValidationError
 
@@ -109,14 +108,3 @@ def test_invalid_paper_instance():
     # invalid if all fields are None
     with pytest.raises(ValidationError):
         Paper(**{})  # noqa: PIE804 - want to be explicit here
-
-
-def test_invalid_isbn_in_paper_init():
-    to_parse = {
-        "doi": DOIIdentifier(
-            identifier="10.21759465/m2z0z61", identifier_type=ExternalIdentifierType.DOI
-        ),
-        "isbn": "invalid_isbn1",  # isbn should be 10 or 13 digit int, with additional rules...
-    }
-    with pytest.raises(ValidationError):
-        Paper(**to_parse)

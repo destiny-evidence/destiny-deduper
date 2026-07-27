@@ -16,73 +16,74 @@ CONFIG_FILE_PATH = PROJECT_ROOT / "config.yaml"
 
 
 class TitleThresholds(BaseModel):
-    """Thresholds for paper titles comparison similarities."""
+    """Thresholds for paper title similarity comparisons."""
 
-    veto: float = Field(default=0.7)
-    similarity: float = Field(default=0.95)
-    similarity_lower: float = Field(default=0.75)
-    partial_match_ratio: float = Field(default=0.9)
+    veto: float
+    similarity: float
+    similarity_lower: float
+    partial_match_ratio: float
 
 
 class AuthorThresholds(BaseModel):
     """Threshold for author comparisons."""
 
-    similarity: float = Field(default=0.92)
-    first_chars: int = Field(default=7)
+    similarity: float
+    first_chars: int
 
 
 class JournalThresholds(BaseModel):
     """Threshold for journal-related comparisons."""
 
-    similarity: float = Field(default=0.70)
-    strong_similarity: float = Field(default=0.92)
-    abbreviation: float = Field(default=0.70)
+    similarity: float
+    strong_similarity: float
+    abbreviation: float
 
 
 class AbstractThresholds(BaseModel):
     """Threshold for abstract comparisons."""
 
-    similarity: float = Field(default=0.70)
+    similarity: float
 
 
 class PaperThresholds(BaseModel):
     """Threshold for paper comparisons."""
 
-    match: float = Field(default=0.90)
+    match: float
 
 
 class ThresholdSettings(BaseModel):
     """Combined threshold settings."""
 
-    doi_partial_match: float = Field(default=0.90)
-    partial_title_match: float = Field(default=0.90)
+    doi_partial_match: float
+    partial_title_match: float
 
-    title: TitleThresholds = Field(default_factory=TitleThresholds)
-    author: AuthorThresholds = Field(default_factory=AuthorThresholds)
-    journal: JournalThresholds = Field(default_factory=JournalThresholds)
-    abstract: AbstractThresholds = Field(default_factory=AbstractThresholds)
-    paper: PaperThresholds = Field(default_factory=PaperThresholds)
+    title: TitleThresholds
+    author: AuthorThresholds
+    journal: JournalThresholds
+    abstract: AbstractThresholds
+    paper: PaperThresholds
 
-    strong_metadata_match: float = Field(default=0.97)
-    min_mismatches_for_veto: int = Field(default=2)
+    strong_metadata_match: float
+    min_mismatches_for_veto: int
 
 
 class WeightSettings(BaseModel):
-    """Settings for weight to be applied to deduplication runs."""
+    """Weights applied during deduplication scoring."""
 
-    doi: float = 5.304259
-    title: float = 11.591445
-    authors: float = 3.704393
-    year: float = 2.646572
-    journal: float = 3.179915
-    pages: float = 3.791240
-    # abstract: float = -0.364041
-    # volume: float = -0.119415
-    issue: float = 1.153251
+    doi: float
+    title: float
+    authors: float
+    year: float
+    journal: float
+    pages: float
+    issue: float
+    intercept: float
+    abstract: float | None = None
+    volume: float | None = None
 
 
 class PatternSettings(BaseModel):
-    """Pattern settings."""
+    """Regular-expression pattern settings."""
 
     html_tag: str
     non_alphanumeric: str
@@ -91,21 +92,67 @@ class PatternSettings(BaseModel):
 
 
 class StopwordSettings(BaseModel):
-    """Stopwords."""
+    """Configured stopword lists."""
 
     title: list[str]
     journal: list[str]
 
 
-class Settings(BaseSettings):
-    """Combined settings class, to be imported elsewhere to access these values."""
+class CsvColumnAliases(BaseModel):
+    """Supported aliases for canonical CSV column names."""
 
-    thresholds: ThresholdSettings = Field(default_factory=ThresholdSettings)
-    weights: WeightSettings = Field(default_factory=WeightSettings)
+    doi: tuple[str, ...] = ("doi",)
+    title: tuple[str, ...] = ("title",)
+    authors: tuple[str, ...] = ("authors", "author")
+    year: tuple[str, ...] = ("year",)
+    journal: tuple[str, ...] = ("journal",)
+    pages: tuple[str, ...] = ("pages",)
+    abstract: tuple[str, ...] = ("abstract",)
+    issue: tuple[str, ...] = ("issue", "number")
+    volume: tuple[str, ...] = ("volume",)
+    recordid: tuple[str, ...] = ("record_id", "recordid")
+    duplicateid: tuple[str, ...] = ("duplicate_id", "duplicateid")
+
+
+class CsvImportSettings(BaseModel):
+    """Settings used when importing reference CSV files."""
+
+    default_columns: tuple[str, ...] = (
+        "doi",
+        "title",
+        "authors",
+        "year",
+        "journal",
+        "pages",
+        "abstract",
+        "issue",
+        "volume",
+        "recordid",
+    )
+
+    gold_standard_columns: tuple[str, ...] = ("duplicateid",)
+
+    supported_encodings: tuple[str, ...] = (
+        "utf-8",
+        "utf-8-sig",
+        "cp1252",
+        "latin1",
+    )
+
+    column_aliases: CsvColumnAliases = Field(default_factory=CsvColumnAliases)
+
+
+class Settings(BaseSettings):
+    """Top-level application settings loaded from YAML."""
+
+    thresholds: ThresholdSettings
+    weights: WeightSettings
     patterns: PatternSettings
     roman_numerals: dict[str, int]
     stopwords: StopwordSettings
     languages: list[str]
+
+    csv_import: CsvImportSettings = Field(default_factory=CsvImportSettings)
 
     model_config = SettingsConfigDict(
         yaml_file=CONFIG_FILE_PATH,
@@ -121,17 +168,17 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        """Get the settings to read from yaml."""
+        """Configure YAML and other settings sources."""
         return (
-            YamlConfigSettingsSource(settings_cls),
             init_settings,
             env_settings,
             dotenv_settings,
+            YamlConfigSettingsSource(settings_cls),
             file_secret_settings,
         )
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return a cached settings instance."""
+    """Return the cached application settings."""
     return Settings()
