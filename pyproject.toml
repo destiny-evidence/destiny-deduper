@@ -49,7 +49,7 @@ pythonpath = "."
 testpaths = ["tests"]
 
 [tool.ruff]
-extend-exclude = ["*.ipynb", "app/migrations/versions/*.py", "deduplication_workflows.md", "docs/*.py"]
+extend-exclude = ["/notebooks", "app/migrations/versions/*.py", "deduplication_workflows.md", "docs/*.py"]
 fix = true
 force-exclude = true
 target-version = "py312"
