@@ -1,13 +1,12 @@
 """Deduplication workflow, in main class `Deduper` with various algorithms."""
 
 import re
-from dataclasses import dataclass
-from dataclasses import field as dataclass_field
 from enum import StrEnum, auto
 from math import exp
 from typing import Literal
 
 from loguru import logger
+from pydantic import BaseModel, ConfigDict, Field
 from rapidfuzz.distance import JaroWinkler as _JaroWinkler
 from rapidfuzz.distance import Levenshtein as _Levenshtein
 
@@ -50,12 +49,16 @@ class StringDistanceAlgorithm(StrEnum):
     LEVENSHTEIN = auto()
 
 
-@dataclass(frozen=True)
-class ScorePairConfig:
+class ScorePairConfig(BaseModel):
     """Configuration for scoring a pair of papers."""
 
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
     string_distance_algorithm: StringDistanceAlgorithm | None = None
-    weights: dict[str, float] = dataclass_field(default_factory=lambda: WEIGHTS.copy())
+    weights: dict[str, float] = Field(default_factory=lambda: WEIGHTS.copy())
     intercept: float = INTERCEPT
     fields: list[str] | None = None
 
