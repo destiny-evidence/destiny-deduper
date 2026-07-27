@@ -125,13 +125,13 @@ Retention strategy options for `remove_duplicates`:
 
 `dedupe_weighted` supports two return modes:
 
-1. Probability-only mode (default):
+(1) Probability-only mode (default):
 
 ```python
 probability = deduper.dedupe_weighted(rec_a, rec_b, weights=WEIGHTS, intercept=INTERCEPT)
 ```
 
-2. Detailed mode:
+(2) Detailed mode:
 
 ```python
 probability, field_scores, early_stop_reason = deduper.dedupe_weighted(
