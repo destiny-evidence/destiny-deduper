@@ -1,4 +1,4 @@
-exclude: '\.ipynb$'
+exclude: '^notebooks/'
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -16,7 +16,6 @@ repos:
       - id: markdownlint-fix
         args:
           - --dot
-        exclude: '^deduplication_workflows\.md$'
   - repo: https://github.com/Lucas-C/pre-commit-hooks
     rev: v1.5.5
     hooks:
