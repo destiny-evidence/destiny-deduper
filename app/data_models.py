@@ -140,7 +140,7 @@ class Paper(BaseModel):
 
     @field_validator("year", mode="before")
     @classmethod
-    def parse_year(cls, v: int | float | str | None) -> int | None:
+    def parse_year(cls, v: float | str | None) -> int | None:
         """
         Parse year field, handling pandas NaN values.
         Converts pandas NaN floats to None. Converts valid numeric years to int.

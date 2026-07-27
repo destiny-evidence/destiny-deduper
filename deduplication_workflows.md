@@ -18,16 +18,15 @@ We recommend using this default decision rule unless you are recalibrating on fr
 - `probability >= 0.85` -> duplicate
 - `probability < 0.85` -> non-duplicate
 
-
 ## Deduplicating unlabelled data
 
 Use this when there is no `duplicateid` and your goal is a deduplicated output file.
 
 Steps:
 
-1. Load unlabeled data 
+1. Load unlabeled data
 2. Build a dataset of candidate pairs using inbuilt blocking criteria
-3. Build validated record cache 
+3. Build validated record cache
 4. Score with `dedupe_weighted`.
 5. Apply duplicate decision rule (`prob > 0.85`).
 6. Resolve duplicate clusters and export unique records.
@@ -64,7 +63,7 @@ pairs_df = build_blocked_pairs(
     df,
     block_rules=BLOCK_RULES,
     id_column="recordid",
-    dup_column=None, #no column to indicate whether pairs are duplicates or not 
+    dup_column=None, #no column to indicate whether pairs are duplicates or not
 )
 
 # build a record cache, checking that references pass validation checks and are ready for scoring
@@ -148,7 +147,7 @@ Use detailed mode for diagnostics and error analysis. Use probability-only mode 
 
 ## Gold-Standard Evaluation (Labeled Data)
 
-Use when a `duplicateid` column is available. 
+Use when a `duplicateid` column is available.
 
 The `duplicateid` column indicates a flag for a group of duplicate records. It provides the ground-truth label for duplicate citations. Records that share the same `duplicateid` refer to the same publication and are considered true duplicates. Records with different `duplicateid` values represent different publications.
 
@@ -167,10 +166,10 @@ In this example:
 - Records **1003** and **1004** share `duplicateid = 202`, representing another labelled duplicate pair.
 - Records **1005** and **1006** have unique `duplicateid` values, indicating they have no labelled duplicates in this dataset.
 
-### Steps for evaluation:
+### Steps for evaluation
 
 1. Load labeled data (`include_gold_standard=True`).
-2. Build a dataset of candidate pairs using inbuilt blocking criteria 
+2. Build a dataset of candidate pairs using inbuilt blocking criteria
 3. Build validated cache.
 4. Score with `dedupe_weighted`.
 5. Compute pair-level metrics and record-level metrics.
@@ -201,7 +200,7 @@ df = load_reference_csv(
     CsvLoadConfig(columns=("recordid", *DEFAULT_COLUMNS), include_gold_standard=True), #include gold standard columns (e.g. duplicateid)
 )
 
-# build dataframe of candidate pairs 
+# build dataframe of candidate pairs
 pairs_df = build_blocked_pairs(
     df,
     block_rules=BLOCK_RULES,
@@ -209,7 +208,7 @@ pairs_df = build_blocked_pairs(
     dup_column="duplicateid", #pass duplicateid column
 )
 
-# build a record cache 
+# build a record cache
 sample_ids = set(pairs_df["id_a"]).union(pairs_df["id_b"])
 record_cache, validation_errors = build_record_cache(
     df,
@@ -234,7 +233,7 @@ for row in pairs_df.itertuples(index=False):
         rec_b,
         weights=WEIGHTS,
         intercept=INTERCEPT,
-        return_details=True, #return full details rather than just dupe/non-dupe output for more detailed evaluation 
+        return_details=True, #return full details rather than just dupe/non-dupe output for more detailed evaluation
     )
 
     rows.append(
@@ -251,7 +250,7 @@ for row in pairs_df.itertuples(index=False):
 scored_df = pd.DataFrame(rows)
 scored_df["is_predicted_duplicate"] = scored_df["prob"] > THRESHOLD
 
-# explore record level metrics to determine how deduplication performed on your dataset 
+# explore record level metrics to determine how deduplication performed on your dataset
 record_metrics = record_level_metrics_for_threshold(
     df_orig=df,
     scored_pairs_df=scored_df,
@@ -262,10 +261,10 @@ record_metrics = record_level_metrics_for_threshold(
 )
 print(record_metrics)
 ```
+
 ## Notes
 
-At present, we have import functions for CSV data only. In future, this can be adapted for different reference formats and inputs. 
-
+At present, we have import functions for CSV data only. In future, this can be adapted for different reference formats and inputs.
 
 ## Column Naming
 
@@ -275,7 +274,6 @@ Defaults in helper functions are still based on:
 - `duplicateid`
 
 If your data uses snake_case names, pass all column arguments explicitly (`id_column`, `dup_column`, `true_cluster_column`, and related arguments).
-
 
 ## Related Notebooks
 

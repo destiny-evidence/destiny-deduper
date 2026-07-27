@@ -3,15 +3,15 @@
 import re
 from typing import TYPE_CHECKING, Literal
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
 from loguru import logger
 from rapidfuzz.distance import JaroWinkler as _JaroWinkler
 from rapidfuzz.distance import Levenshtein as _Levenshtein
 
 from app.config import get_settings
 from app.regexes import HTML_TAG_RE, JOURNAL_PUNCT_RE, NON_ALNUM_RE
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 settings = get_settings()
 

@@ -92,7 +92,8 @@ def load_reference_csv(
             requested_columns,
         )
         if missing and config.require_all_columns:
-            raise ValueError(f"Missing required columns: {missing}")
+            msg = f"Missing required columns: {missing}"
+            raise ValueError(msg)
 
         try:
             dataframe = pd.read_csv(

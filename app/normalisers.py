@@ -2,7 +2,8 @@
 
 import re
 
-from app.data_models import Authorship
+from destiny_sdk.enhancements import Authorship
+
 from app.utils import roman_to_int
 
 PAGE_PARTS = 2
@@ -62,7 +63,8 @@ def normalise_pages(page_range: str | None) -> str | None:
     """
     if not page_range:
         return None
-    page_range = re.sub(r"[---]+", "-", page_range).strip()
+    page_range = re.sub(r"-+", "-", page_range).strip()
+
     parts = page_range.split("-")
     if len(parts) != PAGE_PARTS:
         return page_range
