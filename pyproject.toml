@@ -49,7 +49,7 @@ pythonpath = "."
 testpaths = ["tests"]
 
 [tool.ruff]
-extend-exclude = ["app/migrations/versions/*.py", "docs/*.py"]
+extend-exclude = ["/notebooks", "app/migrations/versions/*.py", "deduplication_workflows.md", "docs/*.py"]
 fix = true
 force-exclude = true
 target-version = "py312"
@@ -67,6 +67,7 @@ lint.ignore = [
     "E501", # let's keep this for now (long lines)
     "FIX002", # implicit trust that TODOs are not trivial, or else they would be fixed
     "ISC001", # simplify implicit str concatenation (ruff-format recommended)
+    "TC003", # Runtime imports required by Pydantic model evaluation
     "TD002", # name for TO DO
     "TD003", # pedantic issue number requester in to dos
 ]

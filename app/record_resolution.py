@@ -12,12 +12,8 @@ Column naming note:
     relevant ``*_column`` arguments explicitly.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Literal
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
+from collections.abc import Iterable
+from typing import Literal
 
 import pandas as pd
 
