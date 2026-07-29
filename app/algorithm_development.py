@@ -101,7 +101,7 @@ def compare_target_fields(
     record_b: Paper,
     deduper: Deduper,
     fields: list = DEDUPE_FIELDS,
-) -> dict[str, float]:
+) -> dict[str, float | int | None]:
     """
     Compute similarity scores for specified fields between two records.
 
@@ -166,7 +166,9 @@ def score_pairs_with_early_stop(
 
     """
     if not record_cache:
-        return pd.DataFrame(), pd.DataFrame(columns=["early_stop_rule", "count"])
+        return pd.DataFrame(), pd.DataFrame(
+            columns=pd.Index(["early_stop_rule", "count"])
+        )
 
     any_paper = next(iter(record_cache.values()))
     deduper = Deduper(reference=any_paper, candidates=[any_paper])

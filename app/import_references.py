@@ -27,7 +27,7 @@ def _normalise_column_name(column_name: str) -> str:
 
 
 def _resolve_requested_columns(
-    available_columns: Sequence[str],
+    available_columns: pd.Index[str] | Sequence[str],
     requested_columns: Sequence[str],
 ) -> tuple[list[str], dict[str, str], list[str]]:
     normalised_available = {
@@ -99,7 +99,7 @@ def load_reference_csv(
             dataframe = pd.read_csv(
                 csv_path,
                 encoding=encoding,
-                usecols=usecols,
+                usecols=pd.Index(usecols) if usecols else None,
                 low_memory=False,
             )
         except UnicodeDecodeError:

@@ -138,8 +138,14 @@ def build_blocked_pairs(
                 if include_labels:
                     dup_a = dup_lookup.get(id_a)
                     dup_b = dup_lookup.get(id_b)
-                    is_dupe = int(
-                        pd.notna(dup_a) and pd.notna(dup_b) and dup_a == dup_b
+                    is_dupe = (
+                        1
+                        if (
+                            isinstance(dup_a, int)
+                            and isinstance(dup_b, int)
+                            and dup_a == dup_b
+                        )
+                        else 0
                     )
                     rows.append((id_a, id_b, is_dupe))
                 else:
@@ -147,7 +153,7 @@ def build_blocked_pairs(
                 seen.add(key)
 
     columns = ["id_a", "id_b", "is_dupe"] if include_labels else ["id_a", "id_b"]
-    pairs_df = pd.DataFrame(rows, columns=columns)
+    pairs_df = pd.DataFrame(rows, columns=pd.Index(columns))
     if include_block_rules and not pairs_df.empty:
         pairs_df["block_rules"] = pairs_df.apply(
             lambda r: " | ".join(

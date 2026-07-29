@@ -118,8 +118,7 @@ def normalise_authors(authors: list[str] | None) -> list[Authorship] | None:
     if not authors:
         return None
     return [
-        Authorship(author_name=normalise_author_name(a), display_name="", position=0)
-        for a in authors
+        Authorship(display_name=normalise_author_name(a), position=0) for a in authors
     ]
 
 

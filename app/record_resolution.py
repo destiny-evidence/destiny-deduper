@@ -13,7 +13,7 @@ Column naming note:
 """
 
 from collections.abc import Iterable
-from typing import Literal
+from typing import Literal, cast
 
 import pandas as pd
 
@@ -225,7 +225,7 @@ def remove_duplicates(  # noqa: PLR0913
             decisions.append(
                 {
                     id_column: row_id,
-                    "predicted_cluster": int(cluster_id),
+                    "predicted_cluster": cast("int", cluster_id),
                     "cluster_size": len(cluster_df),
                     "keep": row_id == keep_id,
                     "removed_as_duplicate": row_id != keep_id,

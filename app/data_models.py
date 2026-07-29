@@ -5,11 +5,13 @@ import re
 from typing import Self
 
 from destiny_sdk.enhancements import (
+    AbstractContentEnhancement,
+    AnnotationEnhancement,
     AuthorPosition,
     Authorship,
     BibliographicMetadataEnhancement,
-    EnhancementType,
     Location,
+    LocationEnhancement,
 )
 from destiny_sdk.identifiers import (
     DOIIdentifier,
@@ -300,7 +302,9 @@ class GoldStandardPaper(Paper):
 
 def extract_identifiers(
     identifiers: list[ExternalIdentifier],
-) -> dict[ExternalIdentifierType, ExternalIdentifier]:
+) -> dict[
+    ExternalIdentifierType | tuple[ExternalIdentifierType, str], ExternalIdentifier
+]:
     """
     Build a mapping from identifier type to identifier object.
     Handles the special case for OTHER/ISBN.
@@ -329,10 +333,24 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
     """
     id_map = extract_identifiers(ref.identifiers) if ref.identifiers else {}
 
-    doi = id_map.get(ExternalIdentifierType.DOI)
-    openalex_id = id_map.get(ExternalIdentifierType.OPEN_ALEX)
-    pubmed_id = id_map.get(ExternalIdentifierType.PM_ID)
-    isbn = id_map.get((ExternalIdentifierType.OTHER, "ISBN"))
+    doi_value = id_map.get(ExternalIdentifierType.DOI)
+    doi = doi_value if isinstance(doi_value, DOIIdentifier) else None
+
+    openalex_value = id_map.get(ExternalIdentifierType.OPEN_ALEX)
+    openalex_id = (
+        openalex_value if isinstance(openalex_value, OpenAlexIdentifier) else None
+    )
+
+    pubmed_value = id_map.get(ExternalIdentifierType.PM_ID)
+    pubmed_id = pubmed_value if isinstance(pubmed_value, PubMedIdentifier) else None
+
+    isbn_value = id_map.get((ExternalIdentifierType.OTHER, "ISBN"))
+    isbn = (
+        isbn_value.identifier
+        if isinstance(isbn_value, OtherIdentifier)
+        and isbn_value.other_identifier_name == "ISBN"
+        else None
+    )
 
     # get bib enhancement, for title/author/year/publisher/etc.
     bib_enh: BibliographicMetadataEnhancement | None = None
@@ -344,18 +362,21 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
         for i, enh in enumerate(ref.enhancements):
             logger.debug(f"on enhancement {i}.")
             logger.debug(f"enhancement: {enh}")
-            enh_content = enh.content  # type: ignore[attr-defined]
-            enh_type = enh_content.enhancement_type
-            if enh_type == EnhancementType.LOCATION and enh_content:
+            enh_content = enh.content
+
+            if isinstance(enh_content, LocationEnhancement):
                 loc_enh = enh_content.locations
                 continue
 
-            if enh_type == EnhancementType.BIBLIOGRAPHIC:
+            if isinstance(enh_content, BibliographicMetadataEnhancement):
                 bib_enh = enh_content
                 continue
 
-            if enh_type == EnhancementType.ABSTRACT:
+            if isinstance(enh_content, AbstractContentEnhancement):
                 abstract = enh_content.abstract
+                continue
+
+            if isinstance(enh_content, AnnotationEnhancement):
                 continue
 
     title = bib_enh.title if bib_enh else None
