@@ -1,12 +1,12 @@
 [dependency-groups]
 dev = [
-    "mypy>=1.16.1",
     "pre-commit>=4.2.0",
     "pytest-cov>=6.2.1",
     "pytest-env (>=1.1.5,<2.0.0)",
     "pytest-mock>=3.14.1",
     "pytest>=8.3.4",
     "ruff>=0.12.0",
+    "ty>=0.0.64",
 ]
 
 [project]
@@ -21,15 +21,12 @@ dependencies = [
     "jupyter>=1.1.1",
     "loguru>=0.7.3",
     "matplotlib>=3.10.7",
-    "mypy>=1.17.1",
-    "pandas-stubs>=2.3.2.250926",
     "pandas>=2.3.3",
     "pre-commit>=4.2.0",
     "pydantic-extra-types>=2.10.5",
     "pydantic-settings>=2.10.1",
     "pydantic>=2.11.7",
     "rapidfuzz>=3.14.5",
-    "ruff>=0.12.7",
     "scikit-learn>=1.7.2",
     "tqdm>=4.68.3",
 ]
@@ -38,10 +35,6 @@ name = "deduplication-toolkit"
 readme = "README.md"
 requires-python = ">=3.12.11"
 version = "0.1.0"
-
-[tool.mypy]
-explicit_package_bases = true
-plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 addopts = ["--color=yes", "--import-mode=importlib", "--verbose"]
@@ -92,3 +85,11 @@ spaces_indent_inline_array = 4
 trailing_comma_inline_array = true
 overrides."project.classifiers".inline_arrays = false
 overrides."tool.coverage.paths.source".inline_arrays = false
+
+[tool.ty.src]
+exclude = [
+    "notebooks",
+    "notebooks/**",
+    "tests",
+    "tests/**",
+]
