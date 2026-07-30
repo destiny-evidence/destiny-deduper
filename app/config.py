@@ -78,8 +78,6 @@ class WeightSettings(BaseModel):
     pages: float
     issue: float
     intercept: float
-    abstract: float | None = None
-    volume: float | None = None
 
 
 class PatternSettings(BaseModel):
