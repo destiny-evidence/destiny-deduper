@@ -1,15 +1,14 @@
 """Data models and associated methods used to specify input and output data."""
 
-import math
 import re
 from typing import Self
 
 from destiny_sdk.enhancements import (
-    AuthorPosition,
+    AbstractContentEnhancement,
     Authorship,
     BibliographicMetadataEnhancement,
-    EnhancementType,
     Location,
+    LocationEnhancement,
 )
 from destiny_sdk.identifiers import (
     DOIIdentifier,
@@ -23,8 +22,6 @@ from destiny_sdk.references import Reference, ReferenceFileInput
 from loguru import logger
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_extra_types.isbn import ISBN
-
-from app.normalisers import normalise_doi
 
 
 class Paper(BaseModel):
@@ -45,226 +42,14 @@ class Paper(BaseModel):
     issue: str | None = Field(default=None)
     abstract: str | None = Field(default=None)
 
-    @field_validator("doi", mode="before")
     @classmethod
-    def parse_doi(cls, v: DOIIdentifier | str | float | None) -> DOIIdentifier | None:
-        """
-        Parse and normalize DOI field to DOIIdentifier object.
-
-        Converts raw DOI strings from CSV/pandas to DOIIdentifier identity objects.
-        Handles pandas NaN values and empty strings. Applies DOI normalization
-        (URL prefix stripping, case folding, symbol decoding). Non-string,
-        non-DOIIdentifier inputs return None. DOI parsing failures are logged
-        as debug messages.
-
-        Args:
-            v: Raw DOI value (may be DOIIdentifier, string, float NaN, or None).
-
-        Returns:
-            DOIIdentifier | None: Parsed DOI identity object, or None if missing,
-                unparseable, or empty.
-
-        """
-        if isinstance(v, DOIIdentifier):
-            return v
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return None
-        if isinstance(v, str):
-            doi = normalise_doi(v)
-            if not doi:
-                return None
-            try:
-                return DOIIdentifier(
-                    identifier=doi,
-                    identifier_type=ExternalIdentifierType.DOI,
-                )
-            except Exception as e:  # noqa: BLE001
-                logger.debug(f"Unable to parse DOI '{doi}': {e}")
-                return None
-        return None
-
-    @field_validator("pages", mode="before")
-    @classmethod
-    def parse_pages(cls, v: str | float | None) -> str | None:
-        """
-        Parse and clean pages field, handling pandas NaN and whitespace.
-
-        Strips whitespace and returns None for pandas NaN floats, None values,
-        or empty strings. Preserves page range formats (e.g., '123-145').
-
-        Args:
-            v: Raw pages value (string, float NaN, or None).
-
-        Returns:
-            str | None: Cleaned pages string, or None if missing or empty.
-
-        """
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return None
-        if isinstance(v, str):
-            v = v.strip()
-            return v or None
-        return None
-
-    @field_validator(
-        "volume",
-        "abstract",
-        "issue",
-        "journal",
-        "publisher",
-        "issn",
-        mode="before",
-    )
-    @classmethod
-    def parse_string_fields(cls, v: str | float | None) -> str | None:
-        """
-        Parse and clean string fields from pandas data, handling NaN values.
-
-        Applies to volume, abstract, issue, journal, publisher, and issn fields.
-        Converts pandas NaN floats to None, strips whitespace, and returns None
-        for empty strings. Non-string, non-NaN inputs pass through unchanged.
-
-        Args:
-            v: Raw field value (string, float NaN, or None).
-
-        Returns:
-            str | None: Cleaned string value, or None if missing or empty.
-
-        """
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return None
-        if isinstance(v, str):
-            v = v.strip()
-            return v or None
-        return None
-
-    @field_validator("year", mode="before")
-    @classmethod
-    def parse_year(cls, v: float | str | None) -> int | None:
-        """
-        Parse year field, handling pandas NaN values.
-        Converts pandas NaN floats to None. Converts valid numeric years to int.
-        This handles the case where pandas represents missing numeric values as
-        float('nan') rather than Python None.
-
-        Args:
-        v: Raw year value (int, float, string, or None).
-
-        Returns:
-        int | None: Year as int, or None if missing or NaN.
-
-        """
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return None
-        return int(v)
-
-    @field_validator("title", mode="before")
-    @classmethod
-    def parse_title(cls, v: str | float | None) -> str | None:
-        """
-        Parse title field, handling pandas NaN values.
-
-        Converts pandas NaN floats to None. Strips whitespace from strings.
-        This handles the case where pandas represents missing values as
-        float('nan') rather than Python None.
-
-        Args:
-            v: Raw title value (string, float NaN, or None).
-
-        Returns:
-            str | None: Title string (stripped), or None if missing or NaN.
-
-        """
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return None
-        if isinstance(v, str):
-            v = v.strip()
-            return v or None
-        return None
-
-    @field_validator("isbn", mode="before")
-    @classmethod
-    def parse_isbn(cls, v: str | float | None) -> str | None:
-        """
-        Parse ISBN field, validating format and detecting ISSN misclassification.
-
-        Accepts ISBN-10 and ISBN-13 formats (with or without hyphens). Rejects
-        ISSN values incorrectly placed in ISBN column (pattern: XXXX-XXX[Xx]).
-        Returns None for invalid lengths or ISSN misclassifications. Passes
-        compact ISBN string (digits only) to Pydantic's ISBN type for check
-        digit validation.
-
-        Args:
-            v: Raw ISBN value (string, float NaN, or other type).
-
-        Returns:
-            str | None: Compact ISBN string (digits only), or None if invalid,
-                missing, or ISSN.
-
-        """
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return None
-        if not isinstance(v, str):
-            return None
-
-        raw = v.strip()
-        if not raw:
-            return None
-
-        # Common in source data: ISSN accidentally in ISBN column (e.g. 0092-8674)
-        if re.fullmatch(r"\d{4}-\d{3}[\dXx]", raw):
-            return None
-
-        compact = re.sub(r"[^0-9Xx]", "", raw)
-        if len(compact) not in (10, 13):
-            return None
-
-        return compact.upper()
-
-    @field_validator("authors", mode="before")
-    @classmethod
-    def parse_authors(cls, v: str | float | None) -> list[Authorship] | None:
-        """
-        Parse author string into list of Authorship objects with position tracking.
-
-        Splits comma and period-delimited author strings into individual authors,
-        assigning AuthorPosition (FIRST, MIDDLE, LAST) based on order. Handles
-        pandas NaN, "anonymous", and already-parsed Authorship lists.
-
-        Args:
-            v: Raw author value (list of Authorship, string, float NaN, or None).
-                String format: "Smith, J.Doe, A.Jones, B" splits on periods after
-                initials.
-
-        Returns:
-            list[Authorship] | None: List of Authorship objects with display_name
-                and position, or None if missing or anonymous.
-
-        """
-        if isinstance(v, list):
-            return v
-
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return None
-        if isinstance(v, str):
-            if v.strip().lower() in ("anonymous", ""):
-                return None
-            # Split on "." followed by letter (typical author initials)
-            author_names = re.split(r"\.(?=\w)", v)
-            author_names = [a.strip() for a in author_names if a.strip()]
-            if not author_names:
-                return None
-            authors_list = []
-            for i, a in enumerate(author_names):
-                position = (
-                    AuthorPosition.FIRST
-                    if i == 0
-                    else AuthorPosition.LAST
-                    if i == len(author_names) - 1
-                    else AuthorPosition.MIDDLE
-                )
-                authors_list.append(Authorship(display_name=a, position=position))
-            return authors_list
+    @field_validator("issn", mode="before")
+    def check_valid_issn(cls, v: str | None) -> str | None:
+        """Ensure issn (if present) is valid."""
+        if v:
+            issn_regex = re.compile(r"^[0-9]{4}-[0-9]{3}[0-9X]$.")
+            if issn_regex.match(v):
+                return v
         return None
 
     @model_validator(mode="after")
@@ -289,9 +74,6 @@ class GoldStandardPaper(Paper):
     Extends base Paper model with recordid and duplicate_id fields for tracking
     individual records and their duplicate groups in labeled datasets. Used when
     training deduplication models or evaluating performance on ground-truth data.
-
-    Inherits all field validators from Paper for pandas NaN handling and
-    field normalization.
     """
 
     recordid: int | None = Field(default=None)
@@ -300,7 +82,9 @@ class GoldStandardPaper(Paper):
 
 def extract_identifiers(
     identifiers: list[ExternalIdentifier],
-) -> dict[ExternalIdentifierType, ExternalIdentifier]:
+) -> dict[
+    tuple[ExternalIdentifierType, str] | ExternalIdentifierType, ExternalIdentifier
+]:
     """
     Build a mapping from identifier type to identifier object.
     Handles the special case for OTHER/ISBN.
@@ -329,10 +113,17 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
     """
     id_map = extract_identifiers(ref.identifiers) if ref.identifiers else {}
 
-    doi = id_map.get(ExternalIdentifierType.DOI)
-    openalex_id = id_map.get(ExternalIdentifierType.OPEN_ALEX)
-    pubmed_id = id_map.get(ExternalIdentifierType.PM_ID)
-    isbn = id_map.get((ExternalIdentifierType.OTHER, "ISBN"))
+    _doi = id_map.get(ExternalIdentifierType.DOI)
+    doi = _doi if isinstance(_doi, DOIIdentifier) else None
+
+    _openalex = id_map.get(ExternalIdentifierType.OPEN_ALEX)
+    openalex_id = _openalex if isinstance(_openalex, OpenAlexIdentifier) else None
+
+    _pubmed = id_map.get(ExternalIdentifierType.PM_ID)
+    pubmed_id = _pubmed if isinstance(_pubmed, PubMedIdentifier) else None
+
+    _isbn = id_map.get((ExternalIdentifierType.OTHER, "ISBN"))
+    isbn = _isbn if isinstance(_isbn, OtherIdentifier) else None
 
     # get bib enhancement, for title/author/year/publisher/etc.
     bib_enh: BibliographicMetadataEnhancement | None = None
@@ -345,19 +136,17 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
             logger.debug(f"on enhancement {i}.")
             logger.debug(f"enhancement: {enh}")
             enh_content = enh.content  # type: ignore[attr-defined]
-            enh_type = enh_content.enhancement_type
-            if enh_type == EnhancementType.LOCATION and enh_content:
+            if isinstance(enh_content, LocationEnhancement):
                 loc_enh = enh_content.locations
                 continue
 
-            if enh_type == EnhancementType.BIBLIOGRAPHIC:
+            if isinstance(enh_content, BibliographicMetadataEnhancement):
                 bib_enh = enh_content
                 continue
 
-            if enh_type == EnhancementType.ABSTRACT:
+            if isinstance(enh_content, AbstractContentEnhancement):
                 abstract = enh_content.abstract
                 continue
-
     title = bib_enh.title if bib_enh else None
     authors = bib_enh.authorship if bib_enh else None
     year = bib_enh.publication_year if bib_enh else None

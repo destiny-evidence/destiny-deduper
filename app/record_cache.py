@@ -4,6 +4,7 @@ import pandas as pd
 from pydantic import ValidationError
 
 from app.data_models import GoldStandardPaper, Paper
+from app.import_references import row_to_paper_kwargs
 
 
 def build_record_cache(
@@ -42,7 +43,7 @@ def build_record_cache(
             continue
 
         try:
-            cache[parsed_id] = record_model(**record)
+            cache[parsed_id] = record_model(**row_to_paper_kwargs(record))
         except ValidationError as exc:
             validation_errors += 1
             if return_invalid_records:

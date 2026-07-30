@@ -1,10 +1,13 @@
 """Candidate pair selection and blocking rules for deduplication."""
 
 import re
+from collections import defaultdict
+from collections.abc import Sequence
 from itertools import combinations
 
 import pandas as pd
 
+from app.data_models import Paper
 from app.normalisers import normalise_doi, normalise_pages, strip_doi_punctuation
 
 BLOCK_RULES = [
@@ -65,94 +68,70 @@ def normalise_block_value(field: str, val: object) -> str | None:
 
 
 def build_blocked_pairs(
-    df: pd.DataFrame,
-    block_rules: list[list[str]] = BLOCK_RULES,
-    id_column: str = "recordid",
-    dup_column: str | None = "duplicateid",
+    papers: Sequence[Paper],
+    block_rules: Sequence[Sequence[str]] = BLOCK_RULES,
     *,
     include_block_rules: bool = False,
 ) -> pd.DataFrame:
-    """
-    Generate candidate record pairs using blocking rules.
-
-    Groups records by normalized field values according to blocking rules.
-    Within each group, creates all pairs and, when duplicate labels are
-    available, marks them as duplicates if both records share the same
-    duplicate_id. Removes duplicate pairs and filters groups smaller than 2
-    records.
-
-    Args:
-        df: DataFrame with records and duplicate labels.
-        block_rules: List of field combinations to block on (default BLOCK_RULES).
-            Each rule is a list of field names; records are grouped by
-            normalized values of those fields.
-        id_column: Column name for record IDs (default "recordid").
-        dup_column: Column name for duplicate group IDs. Set to None for
-            non-gold-standard datasets where duplicate labels are unavailable.
-        include_block_rules: If True, add 'block_rules' column showing which
-            rules generated each pair. Defaults to False.
-
-    Returns:
-        pd.DataFrame: Columns are [id_a, id_b] for unlabeled datasets, or
-            [id_a, id_b, is_dupe] when dup_column is provided. May also include
-            block_rules. Rows are unique candidate pairs ordered by discovery.
-
-    """
-    include_labels = dup_column is not None
-    dup_lookup = df.set_index(id_column)[dup_column].to_dict() if include_labels else {}
+    """Generate candidate pairs using indexes in the supplied paper sequence."""
     seen: set[tuple[int, int]] = set()
-    rows: list[tuple[int, int] | tuple[int, int, int]] = []
+    rows: list[tuple[int, int]] = []
     pair_rules: dict[tuple[int, int], set[str]] = {}
 
     for rule in block_rules:
-        missing = [field for field in rule if field not in df.columns]
-        if missing:
-            continue
-
+        groups: dict[tuple[str, ...], list[int]] = defaultdict(list)
         rule_label = ",".join(rule)
-        subset = df[[id_column, *rule]].copy()
-        norm_cols = []
-        for field in rule:
-            norm_col = f"{field}_norm"
-            subset[norm_col] = subset[field].apply(
-                lambda v, field_name=field: normalise_block_value(field_name, v)
-            )
-            norm_cols.append(norm_col)
 
-        subset = subset.dropna(subset=norm_cols)
-        subset["block_key"] = subset[norm_cols].apply(tuple, axis=1)
+        for index, paper in enumerate(papers):
+            key: list[str] = []
 
-        for _, group in subset.groupby("block_key"):
-            ids = group[id_column].tolist()
-            if len(ids) < _MIN_BLOCK_SIZE:
+            for field in rule:
+                value = normalise_block_value(
+                    field,
+                    getattr(paper, field, None),
+                )
+
+                if value is None:
+                    break
+
+                key.append(value)
+            else:
+                groups[tuple(key)].append(index)
+
+        for group in groups.values():
+            if len(group) < _MIN_BLOCK_SIZE:
                 continue
 
-            for a, b in combinations(ids, 2):
-                id_a, id_b = (a, b) if a < b else (b, a)
-                key = (id_a, id_b)
+            for index_a, index_b in combinations(group, 2):
+                pair = (index_a, index_b)
+
                 if include_block_rules:
-                    pair_rules.setdefault(key, set()).add(rule_label)
-                if key in seen:
+                    pair_rules.setdefault(pair, set()).add(rule_label)
+
+                if pair in seen:
                     continue
 
-                if include_labels:
-                    dup_a = dup_lookup.get(id_a)
-                    dup_b = dup_lookup.get(id_b)
-                    is_dupe = int(
-                        pd.notna(dup_a) and pd.notna(dup_b) and dup_a == dup_b
-                    )
-                    rows.append((id_a, id_b, is_dupe))
-                else:
-                    rows.append((id_a, id_b))
-                seen.add(key)
+                rows.append(pair)
+                seen.add(pair)
 
-    columns = ["id_a", "id_b", "is_dupe"] if include_labels else ["id_a", "id_b"]
-    pairs_df = pd.DataFrame(rows, columns=columns)
+    pairs_df = pd.DataFrame(
+        rows,
+        columns=["index_a", "index_b"],
+    )
+
     if include_block_rules and not pairs_df.empty:
         pairs_df["block_rules"] = pairs_df.apply(
-            lambda r: " | ".join(
-                sorted(pair_rules.get((int(r["id_a"]), int(r["id_b"])), set()))
+            lambda row: " | ".join(
+                sorted(
+                    pair_rules[
+                        (
+                            int(row["index_a"]),
+                            int(row["index_b"]),
+                        )
+                    ]
+                )
             ),
             axis=1,
         )
+
     return pairs_df
