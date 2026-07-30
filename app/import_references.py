@@ -12,7 +12,7 @@ from loguru import logger
 from pydantic import BaseModel, Field, ValidationError
 
 from app.config import CsvImportSettings, get_settings
-from app.data_models import Paper
+from app.data_models import GoldStandardPaper, Paper
 from app.normalisers import normalise_doi
 
 settings = get_settings()
@@ -229,11 +229,12 @@ def load_reference_csv(
             continue
 
         dataframe = dataframe.rename(columns=rename_map)
+        paper_model = GoldStandardPaper if config.include_gold_standard else Paper
 
         papers: list[Paper] = []
         for record in dataframe.to_dict(orient="records"):
             try:
-                papers.append(Paper(**row_to_paper_kwargs(record)))
+                papers.append(paper_model(**row_to_paper_kwargs(record)))
             except ValidationError as exc:
                 logger.debug(f"Skipping invalid row: {exc}")
         return papers
