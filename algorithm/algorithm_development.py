@@ -7,7 +7,6 @@ comparison, and pair scoring with early-stop diagnostics.
 """
 
 import random
-import warnings
 from collections import Counter
 from itertools import combinations
 from pathlib import Path
@@ -88,13 +87,6 @@ def read_process_data_from_file(
             selected columns. All column names are lowercase.
 
     """
-    warnings.warn(
-        "read_process_data_from_file is deprecated. "
-        "Use app.import_references.load_reference_csv instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-
     refdata = pd.read_csv(filepath, **kwargs)
     refdata.columns = [col.lower() for col in refdata.columns]
     final_cols = [col for col in refdata.columns if col not in cols_to_drop]
