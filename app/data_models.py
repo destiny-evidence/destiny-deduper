@@ -71,13 +71,13 @@ class GoldStandardPaper(Paper):
     """
     Paper model with gold-standard labels for model training and evaluation.
 
-    Extends base Paper model with recordid and duplicate_id fields for tracking
+    Extends base Paper model with recordid and duplicateid fields for tracking
     individual records and their duplicate groups in labeled datasets. Used when
     training deduplication models or evaluating performance on ground-truth data.
     """
 
     recordid: int | None = Field(default=None)
-    duplicate_id: int | None = Field(default=None, alias="duplicateid")
+    duplicateid: int | None = Field(default=None)
 
 
 def extract_identifiers(
