@@ -67,17 +67,19 @@ class Paper(BaseModel):
         raise ValueError(all_none_error)
 
 
-class GoldStandardPaper(Paper):
-    """
-    Paper model with gold-standard labels for model training and evaluation.
+class PaperWithId(Paper):
+    """Extends base Paper model with a distinct source-record identifier (recordid)."""
 
-    Extends base Paper model with recordid and duplicateid fields for tracking
-    individual records and their duplicate groups in labeled datasets. Used when
-    training deduplication models or evaluating performance on ground-truth data.
+    recordid: int
+
+
+class GoldStandardPaper(PaperWithId):
+    """
+    Paper model with gold-standard labels for model training and evaluation.Extends PaperWithId model with duplicateid field for tracking duplicate groups in
+    labeled datasets. Used when training deduplication models or evaluating performance on ground-truth data.
     """
 
-    recordid: int | None = Field(default=None)
-    duplicateid: int | None = Field(default=None)
+    duplicateid: int | None = None
 
 
 def extract_identifiers(
