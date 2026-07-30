@@ -1,25 +1,20 @@
-"""
-Cluster-aware record-level deduplication helpers.
+"""Cluster-aware record resolution for validated paper objects."""
 
-This module operates on pandas DataFrames that are usually produced from
-Pydantic-validated records (for example via ``build_record_cache`` and
-``GoldStandardPaper``). The functions here do not instantiate Pydantic models;
-they assume incoming columns are already normalized and trustworthy.
-
-Column naming note:
-- Defaults use legacy gold-standard names: ``recordid`` and ``duplicateid``.
-- If your frame uses snake_case names (for example ``record_id``), pass the
-    relevant ``*_column`` arguments explicitly.
-"""
-
-from collections.abc import Iterable
-from typing import Literal
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
+from typing import Generic, Literal, TypeVar, cast
 
 import pandas as pd
 
-RetentionStrategy = Literal["min_recordid", "metadata_richness", "prefer_doi_abstract"]
+from app.data_models import PaperWithId
 
-PRESENCE_FIELDS = [
+RetentionStrategy = Literal[
+    "min_recordid",
+    "metadata_richness",
+    "prefer_doi_abstract",
+]
+
+PRESENCE_FIELDS = (
     "title",
     "authors",
     "year",
@@ -29,29 +24,100 @@ PRESENCE_FIELDS = [
     "pages",
     "doi",
     "abstract",
-]
+)
+
+PaperWithIdT = TypeVar("PaperWithIdT", bound=PaperWithId)
+
+
+class _EmptyClusterError(ValueError):
+    def __init__(self) -> None:
+        super().__init__("Cannot choose a canonical record from an empty cluster.")
+
+
+class _UnknownRetentionStrategyError(ValueError):
+    def __init__(self, strategy: str) -> None:
+        super().__init__(
+            "Unknown retention strategy "
+            f"{strategy!r}. Use 'min_recordid', 'metadata_richness', "
+            "or 'prefer_doi_abstract'."
+        )
+
+
+class _MissingPairColumnsError(ValueError):
+    def __init__(self, missing_columns: set[str]) -> None:
+        super().__init__(
+            "The scored-pair table is missing required columns: "
+            f"{sorted(missing_columns)}"
+        )
+
+
+class _InvalidPairPositionsError(IndexError):
+    def __init__(
+        self,
+        invalid_edges: Sequence[tuple[int, int]],
+    ) -> None:
+        super().__init__(
+            "The scored-pair table contains out-of-range record "
+            f"positions. Examples: {list(invalid_edges[:5])}"
+        )
+
+
+class _DuplicateRecordIdError(ValueError):
+    def __init__(self) -> None:
+        super().__init__("PaperWithId.recordid values must be unique.")
+
+
+@dataclass(frozen=True)
+class PairColumnConfig:
+    """Column names used to interpret a scored-pair table."""
+
+    probability: str = "probability"
+    index_a: str = "index_a"
+    index_b: str = "index_b"
+
+
+@dataclass(frozen=True)
+class RecordResolutionConfig:
+    """Configuration for resolving pair predictions into record decisions."""
+
+    threshold: float = 0.85
+    strategy: RetentionStrategy = "prefer_doi_abstract"
+    enrich_kept_records: bool = True
+    columns: PairColumnConfig = field(default_factory=PairColumnConfig)
+
+
+@dataclass(frozen=True)
+class RecordResolutionResult(Generic[PaperWithIdT]):
+    """Resolved records and the decisions used to produce them."""
+
+    kept_records: list[PaperWithIdT]
+    removed_records: list[PaperWithIdT]
+    decisions_df: pd.DataFrame
 
 
 def is_present(value: object) -> bool:
-    """Return True when a value is present after null and whitespace checks."""
-    return not pd.isna(value) and str(value).strip() != ""
+    """Return whether a scalar or collection contains a usable value."""
+    if value is None:
+        return False
+
+    if isinstance(value, str):
+        return bool(value.strip())
+
+    if isinstance(value, list | tuple | set | dict):
+        return bool(value)
+
+    try:
+        return not bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return True
 
 
 def cluster_components(
-    record_ids: Iterable[int], edges: Iterable[tuple[int, int]]
+    node_ids: Iterable[int],
+    edges: Iterable[tuple[int, int]],
 ) -> dict[int, int]:
-    """
-    Build connected components from record IDs and predicted duplicate edges.
-
-    Args:
-        record_ids: All record IDs in the current dataset slice.
-        edges: Candidate duplicate links expressed as ``(id_a, id_b)``.
-
-    Returns:
-        Mapping from each record ID to an integer component identifier.
-
-    """
-    parent = {int(record_id): int(record_id) for record_id in record_ids}
+    """Build connected components from integer nodes and duplicate edges."""
+    parent = {int(node_id): int(node_id) for node_id in node_ids}
 
     def find(node_id: int) -> int:
         while parent[node_id] != node_id:
@@ -59,197 +125,332 @@ def cluster_components(
             node_id = parent[node_id]
         return node_id
 
-    def union(left: int, right: int) -> None:
-        root_left = find(left)
-        root_right = find(right)
+    def union(left_id: int, right_id: int) -> None:
+        root_left = find(left_id)
+        root_right = find(right_id)
+
         if root_left != root_right:
             parent[root_right] = root_left
 
-    for left, right in edges:
-        if int(left) in parent and int(right) in parent:
-            union(int(left), int(right))
+    for raw_left, raw_right in edges:
+        left_id = int(raw_left)
+        right_id = int(raw_right)
 
-    root_to_group: dict[int, int] = {}
-    record_to_group: dict[int, int] = {}
-    for record_id in parent:
-        root = find(record_id)
-        group_id = root_to_group.setdefault(root, len(root_to_group))
-        record_to_group[record_id] = group_id
+        if left_id in parent and right_id in parent:
+            union(left_id, right_id)
 
-    return record_to_group
+    root_to_cluster: dict[int, int] = {}
+    node_to_cluster: dict[int, int] = {}
+
+    for node_id in parent:
+        root = find(node_id)
+        cluster_id = root_to_cluster.setdefault(
+            root,
+            len(root_to_cluster),
+        )
+        node_to_cluster[node_id] = cluster_id
+
+    return node_to_cluster
+
+
+def _metadata_count(record: PaperWithId) -> int:
+    """Count populated bibliographic fields on one record."""
+    return sum(
+        is_present(getattr(record, field_name, None)) for field_name in PRESENCE_FIELDS
+    )
 
 
 def choose_canonical_record(
-    cluster_df: pd.DataFrame,
+    records: Sequence[PaperWithIdT],
     strategy: RetentionStrategy = "prefer_doi_abstract",
-) -> int:
-    """
-    Choose one representative record from a predicted duplicate cluster.
-
-    Args:
-        cluster_df: DataFrame slice containing one predicted cluster.
-        strategy: Canonical selection strategy.
-
-    Returns:
-        The selected ``recordid`` for the cluster.
-
-    """
-    scored = cluster_df.copy()
-    scored["has_doi"] = (
-        scored["doi"].map(is_present).astype(int) if "doi" in scored.columns else 0
-    )
-    scored["has_abstract"] = (
-        scored["abstract"].map(is_present).astype(int)
-        if "abstract" in scored.columns
-        else 0
-    )
-
-    available_fields = [field for field in PRESENCE_FIELDS if field in scored.columns]
-    scored["metadata_count"] = scored[available_fields].apply(
-        lambda row: sum(is_present(value) for value in row),
-        axis=1,
-    )
-    scored["abstract_len"] = (
-        scored["abstract"].fillna("").astype(str).str.len()
-        if "abstract" in scored.columns
-        else 0
-    )
+) -> PaperWithIdT:
+    """Choose the record retained from one predicted duplicate cluster."""
+    if not records:
+        raise _EmptyClusterError
 
     if strategy == "min_recordid":
-        sort_cols = ["recordid"]
-        ascending = [True]
-    elif strategy == "metadata_richness":
-        sort_cols = ["metadata_count", "has_doi", "has_abstract", "recordid"]
-        ascending = [False, False, False, True]
-    elif strategy == "prefer_doi_abstract":
-        sort_cols = [
-            "has_doi",
-            "has_abstract",
-            "metadata_count",
-            "abstract_len",
-            "recordid",
-        ]
-        ascending = [False, False, False, False, True]
-    else:
-        msg = (
-            "Unknown strategy. Use one of: "
-            "'min_recordid', 'metadata_richness', 'prefer_doi_abstract'."
+        return min(
+            records,
+            key=lambda record: record.recordid,
         )
-        raise ValueError(msg)
 
-    return int(scored.sort_values(sort_cols, ascending=ascending).iloc[0]["recordid"])
+    if strategy == "metadata_richness":
+        return max(
+            records,
+            key=lambda record: (
+                _metadata_count(record),
+                int(is_present(record.doi)),
+                int(is_present(record.abstract)),
+                -record.recordid,
+            ),
+        )
+
+    if strategy == "prefer_doi_abstract":
+        return max(
+            records,
+            key=lambda record: (
+                int(is_present(record.doi)),
+                int(is_present(record.abstract)),
+                _metadata_count(record),
+                (len(record.abstract.strip()) if record.abstract else 0),
+                -record.recordid,
+            ),
+        )
+
+    raise _UnknownRetentionStrategyError(strategy)
 
 
-def enrich_kept_row(kept_row: pd.Series, cluster_df: pd.DataFrame) -> pd.Series:
-    """
-    Backfill missing fields on the kept row from other rows in the cluster.
+def enrich_kept_record(
+    kept_record: PaperWithIdT,
+    cluster_records: Sequence[PaperWithIdT],
+) -> PaperWithIdT:
+    """Backfill missing fields from validated records in the same cluster."""
+    updates: dict[str, object] = {}
 
-    For ``abstract``, the longest non-empty value is preferred (with
-    ``recordid`` as tie-break). For other fields, the non-empty value from the
-    smallest ``recordid`` is selected.
-    """
-    enriched = kept_row.copy()
-    for field in [field for field in PRESENCE_FIELDS if field in cluster_df.columns]:
-        if is_present(enriched.get(field)):
+    for field_name in PRESENCE_FIELDS:
+        if is_present(getattr(kept_record, field_name, None)):
             continue
 
-        candidates = cluster_df[cluster_df[field].map(is_present)]
-        if candidates.empty:
+        candidates = [
+            record
+            for record in cluster_records
+            if is_present(getattr(record, field_name, None))
+        ]
+        if not candidates:
             continue
 
-        if field == "abstract":
-            best = (
-                candidates.assign(_len=candidates[field].astype(str).str.len())
-                .sort_values(["_len", "recordid"], ascending=[False, True])
-                .iloc[0][field]
+        if field_name == "abstract":
+            source_record = max(
+                candidates,
+                key=lambda record: (
+                    len(
+                        str(
+                            getattr(
+                                record,
+                                field_name,
+                            )
+                        )
+                    ),
+                    -record.recordid,
+                ),
             )
         else:
-            best = candidates.sort_values("recordid").iloc[0][field]
+            source_record = min(
+                candidates,
+                key=lambda record: record.recordid,
+            )
 
-        enriched[field] = best
+        updates[field_name] = getattr(
+            source_record,
+            field_name,
+        )
 
-    return enriched
+    if not updates:
+        return kept_record
 
+    enriched_data = kept_record.model_dump(mode="python")
+    enriched_data.update(updates)
 
-def remove_duplicates(  # noqa: PLR0913
-    df_records: pd.DataFrame,
-    scored_pairs: pd.DataFrame,
-    threshold: float = 0.85,
-    strategy: RetentionStrategy = "prefer_doi_abstract",
-    *,
-    enrich_kept_records: bool = True,
-    probability_column: str = "probability",
-    id_a_column: str = "id_a",
-    id_b_column: str = "id_b",
-    id_column: str = "recordid",
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Resolve pair-level predictions into record-level keep/remove decisions.
-
-    Args:
-        df_records: Full record table.
-        scored_pairs: Pair scores including record IDs and probability values.
-        threshold: Pair score threshold used to create cluster edges.
-        strategy: Canonical retention strategy for each cluster.
-        enrich_kept_records: Whether to backfill kept records from cluster peers.
-        probability_column: Probability column name in ``scored_pairs``.
-        id_a_column: Left pair ID column name in ``scored_pairs``.
-        id_b_column: Right pair ID column name in ``scored_pairs``.
-        id_column: Record ID column name in ``df_records``.
-
-    Returns:
-        Tuple of ``(deduplicated_df, removed_df, decisions_df)``.
-
-    """
-    dedupe_edges = scored_pairs.loc[
-        scored_pairs[probability_column] >= threshold,
-        [id_a_column, id_b_column],
-    ].to_numpy()
-
-    record_to_cluster = cluster_components(
-        df_records[id_column].tolist(),
-        dedupe_edges,
+    return cast(
+        PaperWithIdT,
+        type(kept_record).model_validate(enriched_data),
     )
 
-    annotated = df_records.copy()
-    annotated["predicted_cluster"] = annotated[id_column].map(record_to_cluster)
 
-    decisions = []
-    kept_rows = []
+def _validated_edges(
+    scored_pairs: pd.DataFrame,
+    record_count: int,
+    config: RecordResolutionConfig,
+) -> list[tuple[int, int]]:
+    """Extract and validate predicted duplicate edges."""
+    columns = config.columns
+    required_columns = {
+        columns.probability,
+        columns.index_a,
+        columns.index_b,
+    }
+    missing_columns = required_columns.difference(scored_pairs.columns)
 
-    for cluster_id, cluster_df in annotated.groupby("predicted_cluster", sort=True):
-        keep_id = choose_canonical_record(cluster_df, strategy=strategy)
+    if missing_columns:
+        raise _MissingPairColumnsError(missing_columns)
 
-        for row in cluster_df.itertuples(index=False):
-            row_id = int(getattr(row, id_column))
+    predicted_pairs = scored_pairs.loc[
+        scored_pairs[columns.probability].astype(float) >= config.threshold,
+        [columns.index_a, columns.index_b],
+    ]
+
+    edges = [
+        (int(left_id), int(right_id))
+        for left_id, right_id in (
+            predicted_pairs.itertuples(
+                index=False,
+                name=None,
+            )
+        )
+    ]
+
+    invalid_edges = [
+        edge
+        for edge in edges
+        if (
+            edge[0] < 0
+            or edge[1] < 0
+            or edge[0] >= record_count
+            or edge[1] >= record_count
+        )
+    ]
+
+    if invalid_edges:
+        raise _InvalidPairPositionsError(invalid_edges)
+
+    return edges
+
+
+def _empty_resolution_result() -> RecordResolutionResult[PaperWithIdT]:
+    """Return an empty result with stable decision-table columns."""
+    decisions_df = pd.DataFrame(
+        columns=[
+            "index",
+            "recordid",
+            "predicted_cluster",
+            "cluster_size",
+            "keep",
+            "removed_as_duplicate",
+            "kept_recordid",
+        ]
+    )
+    return RecordResolutionResult(
+        kept_records=[],
+        removed_records=[],
+        decisions_df=decisions_df,
+    )
+
+
+def resolve_records(
+    records: Sequence[PaperWithIdT],
+    scored_pairs: pd.DataFrame,
+    config: RecordResolutionConfig | None = None,
+) -> RecordResolutionResult[PaperWithIdT]:
+    """
+    Resolve pair predictions into kept and removed paper objects.
+
+    Candidate-pair edges are expressed as positions in ``records``. This
+    keeps clustering independent of external ``recordid`` values while
+    retaining those identifiers on every returned object.
+
+    Args:
+        records: Validated records with unique ``recordid`` values.
+        scored_pairs: Pair table containing positions and probabilities.
+        config: Threshold, retention strategy, enrichment, and column names.
+
+    Returns:
+        Resolved kept records, removed records, and a decision DataFrame.
+
+    Raises:
+        ValueError: If record IDs are duplicated or pair columns are absent.
+        IndexError: If a pair references a position outside ``records``.
+
+    """
+    resolution_config = config if config is not None else RecordResolutionConfig()
+    record_list = list(records)
+
+    if not record_list:
+        return _empty_resolution_result()
+
+    record_ids = [record.recordid for record in record_list]
+    if len(record_ids) != len(set(record_ids)):
+        raise _DuplicateRecordIdError
+
+    edges = _validated_edges(
+        scored_pairs,
+        len(record_list),
+        resolution_config,
+    )
+    index_to_cluster = cluster_components(
+        range(len(record_list)),
+        edges,
+    )
+
+    cluster_to_indices: dict[int, list[int]] = {}
+    for index, cluster_id in index_to_cluster.items():
+        cluster_to_indices.setdefault(
+            cluster_id,
+            [],
+        ).append(index)
+
+    kept_records: list[PaperWithIdT] = []
+    removed_records: list[PaperWithIdT] = []
+    decisions: list[dict[str, int | bool]] = []
+
+    for cluster_id, indices in sorted(cluster_to_indices.items()):
+        cluster_records = [record_list[index] for index in indices]
+        canonical_record = choose_canonical_record(
+            cluster_records,
+            strategy=resolution_config.strategy,
+        )
+        kept_record_id = canonical_record.recordid
+
+        if resolution_config.enrich_kept_records and len(cluster_records) > 1:
+            canonical_record = enrich_kept_record(
+                canonical_record,
+                cluster_records,
+            )
+
+        kept_records.append(canonical_record)
+
+        for index in indices:
+            record = record_list[index]
+            keep = record.recordid == kept_record_id
+
             decisions.append(
                 {
-                    id_column: row_id,
-                    "predicted_cluster": int(cluster_id),
-                    "cluster_size": len(cluster_df),
-                    "keep": row_id == keep_id,
-                    "removed_as_duplicate": row_id != keep_id,
-                    "kept_recordid": keep_id,
+                    "index": index,
+                    "recordid": record.recordid,
+                    "predicted_cluster": cluster_id,
+                    "cluster_size": len(indices),
+                    "keep": keep,
+                    "removed_as_duplicate": not keep,
+                    "kept_recordid": kept_record_id,
                 }
             )
 
-        kept_row = cluster_df.loc[cluster_df[id_column] == keep_id].iloc[0]
-        if enrich_kept_records and len(cluster_df) > 1:
-            kept_row = enrich_kept_row(kept_row, cluster_df)
-        kept_rows.append(kept_row)
+            if not keep:
+                removed_records.append(record)
 
-    decisions_df = pd.DataFrame(decisions).sort_values(
-        ["removed_as_duplicate", "cluster_size", id_column],
-        ascending=[False, False, True],
+    decisions_df = (
+        pd.DataFrame(decisions)
+        .sort_values(
+            [
+                "removed_as_duplicate",
+                "cluster_size",
+                "recordid",
+            ],
+            ascending=[False, False, True],
+        )
+        .reset_index(drop=True)
     )
-    deduplicated_df = (
-        pd.DataFrame(kept_rows).sort_values(id_column).reset_index(drop=True)
-    )
-    removed_df = annotated.loc[
-        ~annotated[id_column].isin(deduplicated_df[id_column])
-    ].copy()
 
-    return deduplicated_df, removed_df, decisions_df
+    kept_records.sort(key=lambda record: record.recordid)
+    removed_records.sort(key=lambda record: record.recordid)
+
+    return RecordResolutionResult(
+        kept_records=kept_records,
+        removed_records=removed_records,
+        decisions_df=decisions_df,
+    )
+
+
+def records_to_dataframe(
+    records: Sequence[PaperWithId],
+) -> pd.DataFrame:
+    """Serialize validated paper records into an exportable DataFrame."""
+    return pd.DataFrame(
+        record.model_dump(
+            mode="json",
+            by_alias=True,
+        )
+        for record in records
+    )
 
 
 def record_level_metrics_for_threshold(  # noqa: PLR0913
