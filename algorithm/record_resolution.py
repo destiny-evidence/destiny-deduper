@@ -1,3 +1,6 @@
+# NOTE: This module is overly complex and will require a refactor
+# PURPOSE: Once duplicates are identified, this module is intended to support their removal using a number of different strategies. It is used throughout the notebooks for evaluation purposes but requires more thinking/work before implementation in the main app.
+
 """Cluster-aware record resolution for validated paper objects."""
 
 from collections.abc import Iterable, Sequence

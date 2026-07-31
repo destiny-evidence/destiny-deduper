@@ -14,12 +14,12 @@ import pandas as pd
 from sklearn.metrics import average_precision_score, confusion_matrix, roc_auc_score
 from tqdm.auto import tqdm
 
+from algorithm.record_resolution import record_level_metrics_for_threshold
 from app.candidate_selection import BLOCK_RULES, build_blocked_pairs
 from app.data_models import GoldStandardPaper
 from app.dedupe import INTERCEPT, Deduper, ScorePairConfig
 from app.dedupe import WEIGHTS as MODEL_WEIGHTS
 from app.import_references import DEFAULT_COLUMNS, CsvLoadConfig, load_reference_csv
-from app.record_resolution import record_level_metrics_for_threshold
 
 repo_root = Path.cwd()
 if not (repo_root / "app").exists():

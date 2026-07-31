@@ -15,6 +15,7 @@ import pandas as pd
 from loguru import logger
 from tqdm import tqdm
 
+from algorithm.record_resolution import record_level_metrics_for_threshold
 from app.candidate_selection import (
     _MIN_BLOCK_SIZE,
     BLOCK_RULES,
@@ -24,7 +25,6 @@ from app.data_models import GoldStandardPaper, Paper
 from app.dedupe import Deduper
 from app.early_stop import EARLY_STOP_RULES, ComparisonContext
 from app.record_cache import build_record_cache
-from app.record_resolution import record_level_metrics_for_threshold
 
 SEED = 1234
 DEDUPE_FIELDS = [
