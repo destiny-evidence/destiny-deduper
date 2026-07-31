@@ -7,19 +7,24 @@ comparison, and pair scoring with early-stop diagnostics.
 """
 
 import random
-import warnings
 from collections import Counter
+from itertools import combinations
 from pathlib import Path
 
 import pandas as pd
 from loguru import logger
 from tqdm import tqdm
 
+from algorithm.record_resolution import record_level_metrics_for_threshold
+from app.candidate_selection import (
+    _MIN_BLOCK_SIZE,
+    BLOCK_RULES,
+    normalise_block_value,
+)
 from app.data_models import GoldStandardPaper, Paper
 from app.dedupe import Deduper
 from app.early_stop import EARLY_STOP_RULES, ComparisonContext
 from app.record_cache import build_record_cache
-from app.record_resolution import record_level_metrics_for_threshold
 
 SEED = 1234
 DEDUPE_FIELDS = [
@@ -82,13 +87,6 @@ def read_process_data_from_file(
             selected columns. All column names are lowercase.
 
     """
-    warnings.warn(
-        "read_process_data_from_file is deprecated. "
-        "Use app.import_references.load_reference_csv instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-
     refdata = pd.read_csv(filepath, **kwargs)
     refdata.columns = [col.lower() for col in refdata.columns]
     final_cols = [col for col in refdata.columns if col not in cols_to_drop]
@@ -222,3 +220,97 @@ def score_pairs_with_early_stop(
         )
 
     return pd.DataFrame(results), summary_df
+
+
+def build_blocked_pairs_from_df(
+    df: pd.DataFrame,
+    block_rules: list[list[str]] = BLOCK_RULES,
+    id_column: str = "recordid",
+    dup_column: str | None = "duplicateid",
+    *,
+    include_block_rules: bool = False,
+) -> pd.DataFrame:
+    """
+    Generate candidate record pairs using blocking rules.
+
+    Groups records by normalized field values according to blocking rules.
+    Within each group, creates all pairs and, when duplicate labels are
+    available, marks them as duplicates if both records share the same
+    duplicate_id. Removes duplicate pairs and filters groups smaller than 2
+    records.
+
+    Args:
+        df: DataFrame with records and duplicate labels.
+        block_rules: List of field combinations to block on (default BLOCK_RULES).
+            Each rule is a list of field names; records are grouped by
+            normalized values of those fields.
+        id_column: Column name for record IDs (default "recordid").
+        dup_column: Column name for duplicate group IDs. Set to None for
+            non-gold-standard datasets where duplicate labels are unavailable.
+        include_block_rules: If True, add 'block_rules' column showing which
+            rules generated each pair. Defaults to False.
+
+    Returns:
+        pd.DataFrame: Columns are [id_a, id_b] for unlabeled datasets, or
+            [id_a, id_b, is_dupe] when dup_column is provided. May also include
+            block_rules. Rows are unique candidate pairs ordered by discovery.
+
+    """
+    include_labels = dup_column is not None
+    dup_lookup = df.set_index(id_column)[dup_column].to_dict() if include_labels else {}
+    seen: set[tuple[int, int]] = set()
+    rows: list[tuple[int, int] | tuple[int, int, int]] = []
+    pair_rules: dict[tuple[int, int], set[str]] = {}
+
+    for rule in block_rules:
+        missing = [field for field in rule if field not in df.columns]
+        if missing:
+            continue
+
+        rule_label = ",".join(rule)
+        subset = df[[id_column, *rule]].copy()
+        norm_cols = []
+        for field in rule:
+            norm_col = f"{field}_norm"
+            subset[norm_col] = subset[field].apply(
+                lambda v, field_name=field: normalise_block_value(field_name, v)
+            )
+            norm_cols.append(norm_col)
+
+        subset = subset.dropna(subset=norm_cols)
+        subset["block_key"] = subset[norm_cols].apply(tuple, axis=1)
+
+        for _, group in subset.groupby("block_key"):
+            ids = group[id_column].tolist()
+            if len(ids) < _MIN_BLOCK_SIZE:
+                continue
+
+            for a, b in combinations(ids, 2):
+                id_a, id_b = (a, b) if a < b else (b, a)
+                key = (id_a, id_b)
+                if include_block_rules:
+                    pair_rules.setdefault(key, set()).add(rule_label)
+                if key in seen:
+                    continue
+
+                if include_labels:
+                    dup_a = dup_lookup.get(id_a)
+                    dup_b = dup_lookup.get(id_b)
+                    is_dupe = int(
+                        pd.notna(dup_a) and pd.notna(dup_b) and dup_a == dup_b
+                    )
+                    rows.append((id_a, id_b, is_dupe))
+                else:
+                    rows.append((id_a, id_b))
+                seen.add(key)
+
+    columns = ["id_a", "id_b", "is_dupe"] if include_labels else ["id_a", "id_b"]
+    pairs_df = pd.DataFrame(rows, columns=columns)
+    if include_block_rules and not pairs_df.empty:
+        pairs_df["block_rules"] = pairs_df.apply(
+            lambda r: " | ".join(
+                sorted(pair_rules.get((int(r["id_a"]), int(r["id_b"])), set()))
+            ),
+            axis=1,
+        )
+    return pairs_df

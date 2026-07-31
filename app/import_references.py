@@ -12,7 +12,7 @@ from loguru import logger
 from pydantic import BaseModel, Field, ValidationError
 
 from app.config import CsvImportSettings, get_settings
-from app.data_models import Paper
+from app.data_models import GoldStandardPaper, Paper, PaperWithId
 from app.normalisers import normalise_doi
 
 settings = get_settings()
@@ -179,6 +179,7 @@ class CsvLoadConfig(BaseModel):
     """Configuration for loading reference CSV files."""
 
     columns: tuple[str, ...] = Field(default=DEFAULT_COLUMNS)
+    include_record_id: bool = False
     include_gold_standard: bool = False
     require_all_columns: bool = False
     encodings: tuple[str, ...] = Field(default=SUPPORTED_ENCODINGS)
@@ -199,14 +200,33 @@ def load_reference_csv(
     config = config or CsvLoadConfig()
 
     requested_columns = list(config.columns)
+
+    if config.include_record_id:
+        requested_columns.append("recordid")
+
     if config.include_gold_standard:
         requested_columns.extend(GOLD_STANDARD_COLUMNS)
+
+    requested_columns = list(dict.fromkeys(requested_columns))
+
+    paper_model: type[Paper]
+
+    if config.include_gold_standard:
+        paper_model = GoldStandardPaper
+    elif config.include_record_id:
+        paper_model = PaperWithId
+    else:
+        paper_model = Paper
 
     csv_path = Path(path)
 
     for encoding in config.encodings:
         try:
-            header = pd.read_csv(csv_path, nrows=0, encoding=encoding)
+            header = pd.read_csv(
+                csv_path,
+                nrows=0,
+                encoding=encoding,
+            )
         except UnicodeDecodeError:
             continue
 
@@ -214,6 +234,7 @@ def load_reference_csv(
             list(header.columns),
             requested_columns,
         )
+
         if missing and config.require_all_columns:
             err_msg = f"Missing required columns: {missing}"
             raise ValueError(err_msg)
@@ -231,11 +252,13 @@ def load_reference_csv(
         dataframe = dataframe.rename(columns=rename_map)
 
         papers: list[Paper] = []
+
         for record in dataframe.to_dict(orient="records"):
             try:
-                papers.append(Paper(**row_to_paper_kwargs(record)))
+                papers.append(paper_model(**row_to_paper_kwargs(record)))
             except ValidationError as exc:
                 logger.debug(f"Skipping invalid row: {exc}")
+
         return papers
 
     error_encoding = "unknown"
