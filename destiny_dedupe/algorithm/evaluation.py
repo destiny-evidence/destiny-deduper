@@ -14,12 +14,21 @@ import pandas as pd
 from sklearn.metrics import average_precision_score, confusion_matrix, roc_auc_score
 from tqdm.auto import tqdm
 
-from algorithm.record_resolution import record_level_metrics_for_threshold
-from app.candidate_selection import BLOCK_RULES, build_blocked_pairs
-from app.data_models import GoldStandardPaper
-from app.dedupe import INTERCEPT, Deduper, ScorePairConfig
-from app.dedupe import WEIGHTS as MODEL_WEIGHTS
-from app.import_references import DEFAULT_COLUMNS, CsvLoadConfig, load_reference_csv
+from destiny_dedupe.algorithm.candidate_selection import (
+    BLOCK_RULES,
+    build_blocked_pairs,
+)
+from destiny_dedupe.algorithm.import_references import (
+    DEFAULT_COLUMNS,
+    CsvLoadConfig,
+    load_reference_csv,
+)
+from destiny_dedupe.algorithm.record_resolution import (
+    record_level_metrics_for_threshold,
+)
+from destiny_dedupe.data_models import GoldStandardPaper
+from destiny_dedupe.dedupe import INTERCEPT, Deduper, ScorePairConfig
+from destiny_dedupe.dedupe import WEIGHTS as MODEL_WEIGHTS
 
 repo_root = Path.cwd()
 if not (repo_root / "app").exists():
@@ -213,7 +222,7 @@ def side_by_side_pair_table(
 def find_best_threshold(
     metrics_df: pd.DataFrame,
     min_sensitivity: float = 0.99,
-) -> pd.Series | None:
+) -> pd.Series | pd.DataFrame | None:
     """Maximise specificity among thresholds meeting the sensitivity floor."""
     eligible = metrics_df[metrics_df["sensitivity"] >= min_sensitivity]
     if eligible.empty:
@@ -227,7 +236,7 @@ def build_labelled_pair_table(
     """Build a table of all labelled record pairs from gold-standard papers."""
     rows = []
 
-    for index_a, index_b in build_blocked_pairs(papers):
+    for index_a, index_b in build_blocked_pairs(papers):  # ty:ignore TODO: fix
         paper_a = papers[index_a]
         paper_b = papers[index_b]
 

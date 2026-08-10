@@ -3,8 +3,8 @@
 import pandas as pd
 from pydantic import ValidationError
 
-from app.data_models import GoldStandardPaper, Paper
-from app.import_references import row_to_paper_kwargs
+from destiny_dedupe.algorithm.import_references import row_to_paper_kwargs
+from destiny_dedupe.data_models import GoldStandardPaper, Paper
 
 
 def build_record_cache(

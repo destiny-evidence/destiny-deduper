@@ -28,7 +28,7 @@ from destiny_sdk.visibility import Visibility
 from faker import Faker
 from pydantic import HttpUrl
 
-from app.data_models import Paper
+from destiny_dedupe.data_models import Paper
 
 fa = Faker()
 

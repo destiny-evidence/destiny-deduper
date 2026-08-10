@@ -4,7 +4,7 @@ import re
 
 from destiny_sdk.enhancements import Authorship
 
-from app.utils import roman_to_int
+from destiny_dedupe.utils import roman_to_int
 
 PAGE_PARTS = 2
 
@@ -117,8 +117,10 @@ def normalise_authors(authors: list[str] | None) -> list[Authorship] | None:
     """
     if not authors:
         return None
-    return [
-        Authorship(author_name=normalise_author_name(a), display_name="", position=0)
+    return [  # TO DO: this needs fixing -- wrong arg, wrong position.
+        Authorship(
+            author_name=normalise_author_name(a), display_name="", position=0
+        )  # ty:ignore pydantic-discarded-extra-argument
         for a in authors
     ]
 

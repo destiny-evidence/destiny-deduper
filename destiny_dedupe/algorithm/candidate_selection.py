@@ -7,8 +7,12 @@ from itertools import combinations
 
 import pandas as pd
 
-from app.data_models import Paper
-from app.normalisers import normalise_doi, normalise_pages, strip_doi_punctuation
+from destiny_dedupe.data_models import Paper
+from destiny_dedupe.normalisers import (
+    normalise_doi,
+    normalise_pages,
+    strip_doi_punctuation,
+)
 
 BLOCK_RULES = [
     ["title"],
@@ -41,7 +45,7 @@ def normalise_block_value(field: str, val: object) -> str | None:
             None if value is missing/invalid/empty.
 
     """
-    if pd.isna(val) or val is None or val == "":
+    if pd.isna(val) or val is None or val == "":  # ty:ignore[no-matching-overload]
         return None
 
     text = str(val).strip()

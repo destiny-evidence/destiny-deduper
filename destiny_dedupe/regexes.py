@@ -2,7 +2,7 @@
 
 import re
 
-from app.config import get_settings
+from destiny_dedupe.config import get_settings
 
 settings = get_settings()
 

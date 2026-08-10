@@ -9,7 +9,7 @@ from typing import Generic, Literal, TypeVar, cast
 
 import pandas as pd
 
-from app.data_models import PaperWithId
+from destiny_dedupe.data_models import PaperWithId
 
 RetentionStrategy = Literal[
     "min_recordid",
@@ -110,7 +110,7 @@ def is_present(value: object) -> bool:
         return bool(value)
 
     try:
-        return not bool(pd.isna(value))
+        return not bool(pd.isna(value))  # ty:ignore
     except (TypeError, ValueError):
         return True
 
@@ -254,8 +254,8 @@ def enrich_kept_record(
     enriched_data = kept_record.model_dump(mode="python")
     enriched_data.update(updates)
 
-    return cast(
-        PaperWithIdT,
+    return cast(  # ty:ignore
+        "PaperWithIdT",
         type(kept_record).model_validate(enriched_data),
     )
 

@@ -10,16 +10,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from rapidfuzz.distance import JaroWinkler as _JaroWinkler
 from rapidfuzz.distance import Levenshtein as _Levenshtein
 
-from app.config import get_settings
-from app.data_models import Paper
-from app.early_stop import EARLY_STOP_RULES, ComparisonContext, EarlyStopRule
-from app.normalisers import (
+from destiny_dedupe.config import get_settings
+from destiny_dedupe.data_models import Paper
+from destiny_dedupe.early_stop import EARLY_STOP_RULES, ComparisonContext, EarlyStopRule
+from destiny_dedupe.normalisers import (
     normalise_doi,
     normalise_isbn,
     normalise_pages,
     strip_doi_punctuation,
 )
-from app.utils import (
+from destiny_dedupe.utils import (
     contains_language_name,
     extract_abstract_numbers,
     is_journal_abbreviation_match,

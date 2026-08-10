@@ -6,7 +6,7 @@ from destiny_sdk.enhancements import AuthorPosition, Authorship
 from destiny_sdk.identifiers import DOIIdentifier, ExternalIdentifierType
 from pydantic import BaseModel, ConfigDict
 
-from app import import_references
+from destiny_dedupe.algorithm import import_references
 
 
 def test_normalise_column_name_removes_separators_and_lowercases():
