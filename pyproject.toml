@@ -12,13 +12,13 @@ algorithm-and-notebooks = [
 ]
 dev = [
     "faker>=37.5.3",
-    "mypy>=1.16.1",
     "pre-commit>=4.2.0",
     "pytest-cov>=6.2.1",
     "pytest-env (>=1.1.5,<2.0.0)",
     "pytest-mock>=3.14.1",
     "pytest>=8.3.4",
     "ruff>=0.12.0",
+    "ty>=0.0.69",
 ]
 
 [project]
@@ -40,10 +40,6 @@ name = "deduplication-toolkit"
 readme = "README.md"
 requires-python = ">=3.12.11"
 version = "0.1.0"
-
-[tool.mypy]
-explicit_package_bases = true
-plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 addopts = ["--color=yes", "--import-mode=importlib", "--verbose"]
@@ -102,3 +98,12 @@ spaces_indent_inline_array = 4
 trailing_comma_inline_array = true
 overrides."project.classifiers".inline_arrays = false
 overrides."tool.coverage.paths.source".inline_arrays = false
+
+[tool.ty.src]
+exclude = [
+    "destiny_dedupe/algorithm",
+    "notebooks",
+    "notebooks/**",
+    "tests",
+    "tests/**",
+]
