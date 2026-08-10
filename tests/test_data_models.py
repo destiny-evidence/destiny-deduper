@@ -5,7 +5,7 @@ from destiny_sdk.identifiers import DOIIdentifier, ExternalIdentifierType
 from destiny_sdk.references import ReferenceFileInput
 from pydantic import ValidationError
 
-from app.data_models import Paper, convert_ref_to_paper
+from destiny_dedupe.data_models import Paper, convert_ref_to_paper
 
 
 def test_convert_ref_to_paper_complete_record(valid_complete_destiny_reference):

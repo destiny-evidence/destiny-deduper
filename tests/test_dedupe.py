@@ -4,8 +4,8 @@ import pytest
 from destiny_sdk.identifiers import DOIIdentifier, PubMedIdentifier
 from loguru import logger
 
-from app.data_models import Paper
-from app.dedupe import Deduper
+from destiny_dedupe.data_models import Paper
+from destiny_dedupe.dedupe import Deduper
 
 
 @pytest.fixture
