@@ -23,7 +23,7 @@ jobs:
       UV_CACHE_DIR: /tmp/.uv-cache
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up python
         uses: actions/setup-python@v7
