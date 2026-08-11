@@ -4,10 +4,11 @@ import re
 from typing import Self
 
 from destiny_sdk.enhancements import (
+    AbstractContentEnhancement,
     Authorship,
     BibliographicMetadataEnhancement,
-    EnhancementType,
     Location,
+    LocationEnhancement,
 )
 from destiny_sdk.identifiers import (
     DOIIdentifier,
@@ -24,11 +25,7 @@ from pydantic_extra_types.isbn import ISBN
 
 
 class Paper(BaseModel):
-    """
-    The data structure for incoming records
-    for deduplication.
-
-    """
+    """Data model for paper records used in deduplication."""
 
     doi: DOIIdentifier | None = Field(default=None)
     openalex_id: OpenAlexIdentifier | None = Field(default=None)
@@ -40,7 +37,9 @@ class Paper(BaseModel):
     year: int | None = Field(default=None)
     journal: str | None = Field(default=None)
     publisher: str | None = Field(default=None)
-    pages: tuple[int, int] | None = Field(default=None)
+    pages: str | None = Field(default=None)
+    volume: str | None = Field(default=None)
+    issue: str | None = Field(default=None)
     abstract: str | None = Field(default=None)
 
     @classmethod
@@ -68,9 +67,26 @@ class Paper(BaseModel):
         raise ValueError(all_none_error)
 
 
+class PaperWithId(Paper):
+    """Extends base Paper model with a distinct source-record identifier (recordid)."""
+
+    recordid: int
+
+
+class GoldStandardPaper(PaperWithId):
+    """
+    Paper model with gold-standard labels for model training and evaluation.Extends PaperWithId model with duplicateid field for tracking duplicate groups in
+    labeled datasets. Used when training deduplication models or evaluating performance on ground-truth data.
+    """
+
+    duplicateid: int | None = None
+
+
 def extract_identifiers(
     identifiers: list[ExternalIdentifier],
-) -> dict[ExternalIdentifierType, ExternalIdentifier]:
+) -> dict[
+    tuple[ExternalIdentifierType, str] | ExternalIdentifierType, ExternalIdentifier
+]:
     """
     Build a mapping from identifier type to identifier object.
     Handles the special case for OTHER/ISBN.
@@ -91,16 +107,25 @@ def extract_identifiers(
 
 def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
     """
-    Extract relevant fields for `IncomingRecord`
-    from a destiny-sdk formatted `Reference` or
-    `ReferenceFileInput` object.
+    Extract relevant fields for `IncomingRecord` from destiny-sdk Reference.
+
+    Converts a destiny-sdk formatted `Reference` or `ReferenceFileInput` object
+    into a Paper model by extracting identifiers, bibliographic metadata, and
+    enhancement data.
     """
     id_map = extract_identifiers(ref.identifiers) if ref.identifiers else {}
 
-    doi = id_map.get(ExternalIdentifierType.DOI)
-    openalex_id = id_map.get(ExternalIdentifierType.OPEN_ALEX)
-    pubmed_id = id_map.get(ExternalIdentifierType.PM_ID)
-    isbn = id_map.get((ExternalIdentifierType.OTHER, "ISBN"))
+    _doi = id_map.get(ExternalIdentifierType.DOI)
+    doi = _doi if isinstance(_doi, DOIIdentifier) else None
+
+    _openalex = id_map.get(ExternalIdentifierType.OPEN_ALEX)
+    openalex_id = _openalex if isinstance(_openalex, OpenAlexIdentifier) else None
+
+    _pubmed = id_map.get(ExternalIdentifierType.PM_ID)
+    pubmed_id = _pubmed if isinstance(_pubmed, PubMedIdentifier) else None
+
+    _isbn = id_map.get((ExternalIdentifierType.OTHER, "ISBN"))
+    isbn = _isbn if isinstance(_isbn, OtherIdentifier) else None
 
     # get bib enhancement, for title/author/year/publisher/etc.
     bib_enh: BibliographicMetadataEnhancement | None = None
@@ -113,19 +138,17 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
             logger.debug(f"on enhancement {i}.")
             logger.debug(f"enhancement: {enh}")
             enh_content = enh.content  # type: ignore[attr-defined]
-            enh_type = enh_content.enhancement_type
-            if enh_type == EnhancementType.LOCATION and enh_content:
+            if isinstance(enh_content, LocationEnhancement):
                 loc_enh = enh_content.locations
                 continue
 
-            if enh_type == EnhancementType.BIBLIOGRAPHIC:
+            if isinstance(enh_content, BibliographicMetadataEnhancement):
                 bib_enh = enh_content
                 continue
 
-            if enh_type == EnhancementType.ABSTRACT:
+            if isinstance(enh_content, AbstractContentEnhancement):
                 abstract = enh_content.abstract
                 continue
-
     title = bib_enh.title if bib_enh else None
     authors = bib_enh.authorship if bib_enh else None
     year = bib_enh.publication_year if bib_enh else None
@@ -143,9 +166,13 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
     if issn_list:
         issn = issn_list[0] if isinstance(issn_list, list) else issn_list
 
+    # get volume and issue if available
+    volume = loc_enh_extra.get("volume", None) if loc_enh_extra else None
+    issue = loc_enh_extra.get("issue", None) if loc_enh_extra else None
+
     journal = journal_bib if journal_bib is not None else journal_loc
 
-    # TODO: get pages -- where?
+    # Pages not currently available from destiny-sdk enhancements
     pages = None
 
     return Paper(
@@ -160,5 +187,7 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
         journal=journal,
         publisher=publisher,
         pages=pages,
+        volume=volume,
+        issue=issue,
         abstract=abstract,
     )

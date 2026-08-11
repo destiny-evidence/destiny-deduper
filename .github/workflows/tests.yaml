@@ -48,10 +48,10 @@ jobs:
             uv-${{ runner.os }}
 
       - name: Install the project
-        run: uv sync --locked --all-extras --dev
+        run: uv sync --locked --all-extras --all-groups
 
       - name: Run test with pytest
-        run: uv run pytest --cov=app/ --cov-report=xml
+        run: uv run pytest --cov=destiny_dedupe/ --cov-report=xml
 
       - name: Code coverage reporting
         uses: irongut/CodeCoverageSummary@v1.3.0

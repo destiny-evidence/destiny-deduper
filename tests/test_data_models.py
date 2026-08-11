@@ -1,9 +1,11 @@
+from typing import Any
+
 import pytest
 from destiny_sdk.identifiers import DOIIdentifier, ExternalIdentifierType
 from destiny_sdk.references import ReferenceFileInput
 from pydantic import ValidationError
 
-from app.data_models import Paper, convert_ref_to_paper
+from destiny_dedupe.data_models import Paper, convert_ref_to_paper
 
 
 def test_convert_ref_to_paper_complete_record(valid_complete_destiny_reference):
@@ -18,7 +20,7 @@ def test_convert_ref_to_paper_complete_record(valid_complete_destiny_reference):
     bib = next(
         (
             e.content
-            for e in ref.enhancements
+            for e in ref.enhancements or []
             if getattr(e.content, "enhancement_type", None) == "bibliographic"
         ),
         None,
@@ -39,7 +41,7 @@ def test_convert_ref_to_paper_incomplete_record(valid_incomplete_destiny_referen
     bib = next(
         (
             e.content
-            for e in ref.enhancements
+            for e in ref.enhancements or []
             if getattr(e.content, "enhancement_type", None) == "bibliographic"
         ),
         None,
@@ -60,13 +62,17 @@ def test_convert_ref_string_from_file_to_paper_valid_jsonl(
     bib = next(
         (
             e.content
-            for e in ref.enhancements
+            for e in ref.enhancements or []
             if getattr(e.content, "enhancement_type", None) == "bibliographic"
         ),
         None,
     )
     doi = next(
-        (i for i in ref.identifiers if getattr(i, "identifier_type", None) == "doi"),
+        (
+            i
+            for i in ref.identifiers or []
+            if getattr(i, "identifier_type", None) == "doi"
+        ),
         None,
     )
     assert paper.doi == doi
@@ -86,7 +92,7 @@ def test_convert_ref_file_input_to_paper_valid_ref_file_obj(
     bib = next(
         (
             e.content
-            for e in ref.enhancements
+            for e in ref.enhancements or []
             if getattr(e.content, "enhancement_type", None) == "bibliographic"
         ),
         None,
@@ -112,7 +118,7 @@ def test_invalid_paper_instance():
 
 
 def test_invalid_isbn_in_paper_init():
-    to_parse = {
+    to_parse: dict[str, Any] = {
         "doi": DOIIdentifier(
             identifier="10.21759465/m2z0z61", identifier_type=ExternalIdentifierType.DOI
         ),

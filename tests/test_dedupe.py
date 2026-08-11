@@ -4,8 +4,8 @@ import pytest
 from destiny_sdk.identifiers import DOIIdentifier, PubMedIdentifier
 from loguru import logger
 
-from app.data_models import Paper
-from app.dedupe import Deduper
+from destiny_dedupe.data_models import Paper
+from destiny_dedupe.dedupe import Deduper
 
 
 @pytest.fixture
@@ -127,13 +127,14 @@ def test_compare_one_to_many_returns_list(paper_with_doi, paper_with_different_d
     assert all(isinstance(x, float) for x in results)
 
 
-def test_compare_title_not_implemented(paper_with_doi):
+def test_compare_title_exact_match(paper_with_doi):
     deduper = Deduper(reference=paper_with_doi, candidates=[paper_with_doi])
-    with pytest.raises(NotImplementedError):
-        deduper.compare_title(paper_with_doi, paper_with_doi)
+    score = deduper.compare_title(paper_with_doi, paper_with_doi)
+    assert score == 1.0
 
 
-def test_compare_authors_not_implemented(paper_with_doi):
+def test_compare_authors_no_authors_returns_zero(paper_with_doi):
+    # paper_with_doi has no authors field set
     deduper = Deduper(reference=paper_with_doi, candidates=[paper_with_doi])
-    with pytest.raises(NotImplementedError):
-        deduper.compare_authors(paper_with_doi, paper_with_doi)
+    score = deduper.compare_authors(paper_with_doi, paper_with_doi)
+    assert score == 0.0
