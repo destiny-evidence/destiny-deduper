@@ -1,3 +1,5 @@
+decision_threshold: 0.85
+
 thresholds:
   doi_partial_match: 0.90
   partial_title_match: 0.90

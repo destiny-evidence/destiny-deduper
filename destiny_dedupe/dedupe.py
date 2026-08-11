@@ -19,6 +19,13 @@ from destiny_dedupe.normalisers import (
     normalise_pages,
     strip_doi_punctuation,
 )
+from destiny_dedupe.pair_score_result import (
+    EarlyStopReason,
+    FieldResult,
+    FieldStatus,
+    PairLabel,
+    PairScoreResult,
+)
 from destiny_dedupe.utils import (
     contains_language_name,
     extract_abstract_numbers,
@@ -153,22 +160,19 @@ class Deduper:
         record_b: Paper,
         config: ScorePairConfig | None = None,
         **kwargs,
-    ) -> tuple[float, dict[str, float], str | None]:
+    ) -> PairScoreResult:
         """
-        Score a pair once and return both the probability, per-field matches, and early-stop reason.
-        Optionally restrict to a subset of fields.
+        Score a pair and return a structured result.
 
         Args:
             record_a (Paper): First record.
             record_b (Paper): Second record.
-            string_distance_algorithm: Algorithm to use.
-            weights: Field weights.
-            intercept: Intercept for logistic regression.
-            fields: List of fields to use (if None, use all in weights).
+            config (ScorePairConfig | None): Scoring configuration.
+            **kwargs: Additional keyword arguments passed to comparison methods.
 
         Returns:
-            tuple: (probability, field_scores, early_stop_reason)
-                   early_stop_reason is None if no early stop triggered.
+            PairScoreResult with probability, per-field results, early-stop
+            reason, DOI mismatch flag, and suggested label.
 
         """
         config = config or ScorePairConfig()
@@ -185,11 +189,23 @@ class Deduper:
         kwargs = dict(kwargs)
         kwargs["string_distance_algorithm"] = string_distance_algorithm
 
-        early_stop_reason = self.should_early_stop(record_a, record_b)
-        if early_stop_reason is not None:
-            return 0.0, {}, early_stop_reason
+        threshold = settings.decision_threshold
 
-        field_scores: dict[str, float] = {}
+        early_stop_reason_str = self.should_early_stop(record_a, record_b)
+        if early_stop_reason_str is not None:
+            try:
+                early_stop_reason = EarlyStopReason(early_stop_reason_str)
+            except ValueError:
+                early_stop_reason = None
+            return PairScoreResult(
+                probability=0.0,
+                doi_mismatch_adjustment_applied=False,
+                field_results={},
+                early_stop_reason=early_stop_reason,
+                label=PairLabel.NOT_DUPLICATE,
+            )
+
+        field_results: dict[str, FieldResult] = {}
         weighted_total = 0.0
 
         # Determine which fields to use
@@ -198,28 +214,48 @@ class Deduper:
         else:
             fields_to_use = list(weights.items())
 
-        for field, weight in fields_to_use:
-            val_a = getattr(record_a, field, None)
-            val_b = getattr(record_b, field, None)
+        for field_name, weight in fields_to_use:
+            val_a = getattr(record_a, field_name, None)
+            val_b = getattr(record_b, field_name, None)
 
-            if val_a is None or val_b is None:
+            if val_a is None and val_b is None:
+                field_results[field_name] = FieldResult(status=FieldStatus.MISSING_BOTH)
                 continue
 
-            compare_method = getattr(self, f"compare_{field}", None)
+            if val_a is None:
+                field_results[field_name] = FieldResult(
+                    status=FieldStatus.MISSING_A,
+                    value_b=str(val_b),
+                )
+                continue
+
+            if val_b is None:
+                field_results[field_name] = FieldResult(
+                    status=FieldStatus.MISSING_B,
+                    value_a=str(val_a),
+                )
+                continue
+
+            compare_method = getattr(self, f"compare_{field_name}", None)
             if compare_method is None:
-                logger.warning(f"No compare method for field: {field}")
+                logger.warning(f"No compare method for field: {field_name}")
                 continue
 
             try:
                 match_score = compare_method(record_a, record_b, **kwargs)
             except (ValueError, TypeError, AttributeError) as e:
-                logger.error(f"Error comparing {field}: {e}")
+                logger.error(f"Error comparing {field_name}: {e}")
                 continue
 
-            field_scores[field] = match_score
+            field_results[field_name] = FieldResult(
+                status=FieldStatus.COMPARED,
+                value_a=str(val_a),
+                value_b=str(val_b),
+                score=match_score,
+            )
             weighted_total += match_score * weight
             logger.debug(
-                f"{field}: match_score={match_score:.4f}, weight={weight}, "
+                f"{field_name}: match_score={match_score:.4f}, weight={weight}, "
                 f"weighted={match_score * weight:.4f}"
             )
 
@@ -231,17 +267,26 @@ class Deduper:
         # Apply DOI mismatch penalty if both DOIs are present and do not match
         doi_a = getattr(record_a, "doi", None)
         doi_b = getattr(record_b, "doi", None)
-        penalty_factor = 1.0
+        doi_mismatch_adjustment_applied = False
         if doi_a is not None and doi_b is not None:
             norm_a = normalise_doi(getattr(doi_a, "identifier", None))
             norm_b = normalise_doi(getattr(doi_b, "identifier", None))
             if norm_a and norm_b and norm_a != norm_b:
-                penalty_factor = 0.9
+                doi_mismatch_adjustment_applied = True
+                probability = probability * 0.9
                 logger.debug(
-                    f"DOI mismatch penalty applied: {norm_a} != {norm_b}, factor={penalty_factor}"
+                    f"DOI mismatch penalty applied: {norm_a} != {norm_b}, factor=0.9"
                 )
 
-        return probability * penalty_factor, field_scores, None
+        label = PairLabel.DUPLICATE if probability >= threshold else PairLabel.NOT_DUPLICATE
+
+        return PairScoreResult(
+            probability=probability,
+            doi_mismatch_adjustment_applied=doi_mismatch_adjustment_applied,
+            field_results=field_results,
+            early_stop_reason=None,
+            label=label,
+        )
 
     def compare_one_to_many(
         self,
