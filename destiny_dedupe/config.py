@@ -143,7 +143,7 @@ class CsvImportSettings(BaseModel):
 class Settings(BaseSettings):
     """Top-level application settings loaded from YAML."""
 
-    decision_threshold: float = 0.85
+    decision_threshold: float
     thresholds: ThresholdSettings
     weights: WeightSettings
     patterns: PatternSettings

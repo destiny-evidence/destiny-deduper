@@ -1,12 +1,10 @@
 """Structured result types for pair scoring and library configuration."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 from enum import StrEnum
 from functools import lru_cache
-from importlib.metadata import version as _pkg_version
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -95,8 +93,8 @@ def get_library_info() -> LibraryInfo:
 
     try:
         pkg_version = _pkg_version("deduplication-toolkit")
-    except Exception:  # noqa: BLE001
-        pkg_version = "unknown"
+    except PackageNotFoundError:
+        raise PackageNotFoundError("Package 'deduplication-toolkit' is not installed.")
 
     scoring_config: dict[str, object] = {
         "weights": settings.weights.model_dump(),

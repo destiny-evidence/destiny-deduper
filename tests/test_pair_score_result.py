@@ -13,11 +13,6 @@ from destiny_dedupe.pair_score_result import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture
 def duplicate_pair():
     """Two Papers that are very likely duplicates."""
@@ -100,11 +95,6 @@ def doi_mismatch_pair():
         doi=doi_b,
     )
     return paper_a, paper_b
-
-
-# ---------------------------------------------------------------------------
-# score_pair tests
-# ---------------------------------------------------------------------------
 
 
 def test_score_pair_normal_scoring_returns_pair_score_result(duplicate_pair):
@@ -216,11 +206,6 @@ def test_score_pair_no_doi_mismatch_flag_when_no_doi():
     result = deduper.score_pair(paper_a, paper_b)
 
     assert result.doi_mismatch_adjustment_applied is False
-
-
-# ---------------------------------------------------------------------------
-# get_library_info tests
-# ---------------------------------------------------------------------------
 
 
 def test_get_library_info_returns_library_info():
