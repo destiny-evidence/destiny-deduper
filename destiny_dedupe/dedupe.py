@@ -196,6 +196,10 @@ class Deduper:
             try:
                 early_stop_reason = EarlyStopReason(early_stop_reason_str)
             except ValueError:
+                logger.warning(
+                    f"Unknown early-stop reason {early_stop_reason_str!r}; "
+                    "EarlyStopReason enum may be out of sync with early_stop.py"
+                )
                 early_stop_reason = None
             return PairScoreResult(
                 probability=0.0,
@@ -257,6 +261,19 @@ class Deduper:
             logger.debug(
                 f"{field_name}: match_score={match_score:.4f}, weight={weight}, "
                 f"weighted={match_score * weight:.4f}"
+            )
+
+        any_compared = any(
+            fr.status == FieldStatus.COMPARED for fr in field_results.values()
+        )
+        if not any_compared:
+            return PairScoreResult(
+                probability=0.0,
+                doi_mismatch_adjustment_applied=False,
+                field_results=field_results,
+                early_stop_reason=None,
+                label=PairLabel.UNSCORABLE,
+                unscorable_reason="no_comparable_fields",
             )
 
         raw_score = weighted_total + intercept
