@@ -92,7 +92,7 @@ build_command = """
     git add uv.lock
     uv build
 """
-tag_format = "v{version}"
+tag_format = "{version}"
 version_toml = ["pyproject.toml:project.version"]
 
 [tool.semantic_release.branches.develop]
