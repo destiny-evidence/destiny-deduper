@@ -1,6 +1,5 @@
 """General utility functions for the deduplication toolkit."""
 
-import re
 from typing import TYPE_CHECKING, Literal
 
 from loguru import logger
@@ -158,24 +157,3 @@ def calculate_string_distance(
         )
         raise ValueError(no_method_for_alg_err_msg)
     return method(string_a, string_b)
-
-
-def extract_abstract_numbers(text: str) -> dict[str, int]:
-    """
-    Extract numeric tokens from abstract text as a multiset.
-
-    Args:
-        text: Abstract text to process
-
-    Returns:
-        Dictionary mapping numeric tokens to their frequency
-
-    """
-    if not text:
-        return {}
-    tokens = re.findall(r"\d+(?:\.\d+)?", text)
-    # Create a dictionary with counts (multiset)
-    result: dict[str, int] = {}
-    for token in tokens:
-        result[token] = result.get(token, 0) + 1
-    return result

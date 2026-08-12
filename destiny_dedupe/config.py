@@ -39,12 +39,6 @@ class JournalThresholds(BaseModel):
     abbreviation: float
 
 
-class AbstractThresholds(BaseModel):
-    """Threshold for abstract comparisons."""
-
-    similarity: float
-
-
 class PaperThresholds(BaseModel):
     """Threshold for paper comparisons."""
 
@@ -60,7 +54,6 @@ class ThresholdSettings(BaseModel):
     title: TitleThresholds
     author: AuthorThresholds
     journal: JournalThresholds
-    abstract: AbstractThresholds
     paper: PaperThresholds
 
     strong_metadata_match: float
@@ -105,7 +98,6 @@ class CsvColumnAliases(BaseModel):
     year: tuple[str, ...] = ("year",)
     journal: tuple[str, ...] = ("journal",)
     pages: tuple[str, ...] = ("pages",)
-    abstract: tuple[str, ...] = ("abstract",)
     issue: tuple[str, ...] = ("issue", "number")
     volume: tuple[str, ...] = ("volume",)
     recordid: tuple[str, ...] = ("record_id", "recordid")
@@ -122,7 +114,6 @@ class CsvImportSettings(BaseModel):
         "year",
         "journal",
         "pages",
-        "abstract",
         "issue",
         "volume",
         "recordid",

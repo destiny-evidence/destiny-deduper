@@ -272,37 +272,6 @@ def check_title_and_metadata_mismatch(ctx: ComparisonContext) -> bool:
     return False
 
 
-def check_year_gap_abstract_numeric_mismatch(
-    ctx: ComparisonContext,
-) -> bool:
-    """
-    Year-gap + abstract-numeric conflict:
-    if core metadata still looks very similar but publication years diverge,
-    use abstract numbers as a disambiguation veto.
-
-    """
-    ctx.record_a = ctx.record_a
-    ctx.record_b = ctx.record_b
-
-    if ctx.record_a.year is None or ctx.record_b.year is None:
-        return False
-
-    if abs(int(ctx.record_a.year) - int(ctx.record_b.year)) <= 1:
-        return False
-
-    title_sim = ctx.deduper.compare_title(ctx.record_a, ctx.record_b)
-    authors_sim = ctx.deduper.compare_authors(ctx.record_a, ctx.record_b)
-    journal_sim = ctx.deduper.compare_journal(ctx.record_a, ctx.record_b)
-
-    strong_metadata_match = title_sim >= STRONG_METADATA_MATCH_THRESHOLD and (
-        authors_sim >= AUTHORS_SIM_THRESHOLD or journal_sim >= JOURNAL_SIM_THRESHOLD
-    )
-
-    return strong_metadata_match and ctx.deduper.has_abstract_conflict(
-        ctx.record_a, ctx.record_b
-    )
-
-
 EARLY_STOP_RULES = [
     EarlyStopRule(reason="doi_and_pages_mismatch", check=check_doi_pages_mismatch),
     EarlyStopRule(
@@ -319,9 +288,5 @@ EARLY_STOP_RULES = [
     ),
     EarlyStopRule(
         reason="title_with_metadata_mismatch", check=check_title_and_metadata_mismatch
-    ),
-    EarlyStopRule(
-        reason="year_gap_with_abstract_conflict",
-        check=check_year_gap_abstract_numeric_mismatch,
     ),
 ]

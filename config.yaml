@@ -19,9 +19,6 @@ thresholds:
     strong_similarity: 0.92
     abbreviation: 0.70
 
-  abstract:
-    similarity: 0.70
-
   paper:
     match: 0.90
 
@@ -35,8 +32,6 @@ weights:
   year: 2.646572
   journal: 3.179915
   pages: 3.791240
-  # abstract: -0.364041
-  # volume: -0.119415
   issue: 1.153251
   intercept: -18.688678
 
@@ -195,7 +190,6 @@ csv_import:
     - year
     - journal
     - pages
-    - abstract
     - issue
     - volume
     - recordid
@@ -228,9 +222,6 @@ csv_import:
 
     pages:
       - pages
-
-    abstract:
-      - abstract
 
     issue:
       - issue

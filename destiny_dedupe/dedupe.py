@@ -1,6 +1,5 @@
 """Deduplication workflow, in main class `Deduper` with various algorithms."""
 
-import re
 from enum import StrEnum, auto
 from math import exp
 from typing import Literal
@@ -28,7 +27,6 @@ from destiny_dedupe.pair_score_result import (
 )
 from destiny_dedupe.utils import (
     contains_language_name,
-    extract_abstract_numbers,
     is_journal_abbreviation_match,
     split_title_segments,
 )
@@ -38,7 +36,6 @@ settings = get_settings()
 # constants
 WEIGHTS = settings.weights.model_dump()
 INTERCEPT: float = settings.weights.intercept
-ABSTRACT_SIMILARITY_THRESHOLD = settings.thresholds.abstract.similarity
 JOURNAL_ABBREVIATION_THRESHOLD = settings.thresholds.journal.abbreviation
 
 
@@ -295,7 +292,9 @@ class Deduper:
                     f"DOI mismatch penalty applied: {norm_a} != {norm_b}, factor=0.9"
                 )
 
-        label = PairLabel.DUPLICATE if probability >= threshold else PairLabel.NOT_DUPLICATE
+        label = (
+            PairLabel.DUPLICATE if probability >= threshold else PairLabel.NOT_DUPLICATE
+        )
 
         return PairScoreResult(
             probability=probability,
@@ -352,7 +351,6 @@ class Deduper:
         Implements early stopping logic:
         - If DOI and PAGES both present and both don't match -> STOP (return 0.0)
         - Otherwise compute mean of all available match scores
-        - Excludes abstract and issue from the mean calculation
 
         Args:
             record_a (Paper): first paper to compare
@@ -448,7 +446,6 @@ class Deduper:
         - year: 0.12
         - journal: 1.42
         - pages: 1.01
-        - abstract: -0.29 (negative weight)
         - volume: 0.38
         - issue: -0.22 (negative weight)
         - intercept: -8.80
@@ -542,29 +539,6 @@ class Deduper:
                 return rule.reason
         logger.info("No early stopping reason detected.")
         return None
-
-    def has_abstract_conflict(self, record_a: Paper, record_b: Paper) -> bool:
-        """Return True when abstracts are present and show conflicting content."""
-        abstract_a = getattr(record_a, "abstract", None)
-        abstract_b = getattr(record_b, "abstract", None)
-
-        if not abstract_a or not abstract_b:
-            return False
-
-        # In the select year-gap subgroup, abstract disagreement is treated as
-        # strong evidence against a duplicate.
-        abstract_sim = self.compare_abstract(record_a, record_b)
-        if abstract_sim < ABSTRACT_SIMILARITY_THRESHOLD:
-            return True
-
-        nums_a = extract_abstract_numbers(abstract_a)
-        nums_b = extract_abstract_numbers(abstract_b)
-
-        # If neither abstract has numbers, similarity check above decides.
-        if not nums_a and not nums_b:
-            return False
-
-        return nums_a != nums_b
 
     def compare_doi(
         self,
@@ -867,53 +841,6 @@ class Deduper:
         pages_a = normalise_pages(record_a.pages)
         pages_b = normalise_pages(record_b.pages)
         return float(pages_a == pages_b)
-
-    def compare_abstract(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
-        """
-        Compare abstracts between two papers using Levenshtein distance,
-        after removing boilerplate words/phrases (e.g., 'methods', 'results', 'ABSTRACT:').
-
-        Returns:
-            float: similarity score between 0 and 1
-
-        """
-        if not record_a.abstract or not record_b.abstract:
-            return 0.0
-
-        def preprocess_abstract(text: str) -> str:
-            # Remove common boilerplate words/section headers
-            boilerplate = [
-                r"\babstract:?\b",
-                r"\bbackground:?\b",
-                r"\bmethods?:?\b",
-                r"\bresults?:?\b",
-                r"\bconclusions?:?\b",
-                r"\bobjective[s]?:?\b",
-                r"\bintroduction:?\b",
-                r"\bpurpose:?\b",
-                r"\bdesign:?\b",
-                r"\bsetting:?\b",
-                r"\bparticipants?:?\b",
-                r"\bmain outcome[s]?:?\b",
-                r"\bdiscussion:?\b",
-                r"\bimplications?:?\b",
-                r"\bconclusion:?\b",
-            ]
-            text = text.lower()
-            for pat in boilerplate:
-                text = re.sub(pat, " ", text)
-            # Remove extra whitespace
-            return re.sub(r"\s+", " ", text).strip()
-
-        abs_a = preprocess_abstract(record_a.abstract)
-        abs_b = preprocess_abstract(record_b.abstract)
-
-        algo = kwargs.get(
-            "string_distance_algorithm", StringDistanceAlgorithm.LEVENSHTEIN
-        )
-        return Deduper.calculate_string_distance(
-            abs_a, abs_b, string_distance_algorithm=algo
-        )
 
     def compare_volume(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
         """
