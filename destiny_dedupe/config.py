@@ -135,6 +135,7 @@ class Settings(BaseSettings):
     """Top-level application settings loaded from YAML."""
 
     decision_threshold: float
+    doi_mismatch_penalty: float
     thresholds: ThresholdSettings
     weights: WeightSettings
     patterns: PatternSettings

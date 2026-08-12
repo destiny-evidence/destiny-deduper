@@ -36,6 +36,7 @@ settings = get_settings()
 # constants
 WEIGHTS = settings.weights.model_dump()
 INTERCEPT: float = settings.weights.intercept
+DOI_MISMATCH_PENALTY = settings.doi_mismatch_penalty
 JOURNAL_ABBREVIATION_THRESHOLD = settings.thresholds.journal.abbreviation
 
 
@@ -158,62 +159,112 @@ class Deduper:
         config: ScorePairConfig | None = None,
         **kwargs,
     ) -> PairScoreResult:
-        """
-        Score a pair and return a structured result.
-
-        Args:
-            record_a (Paper): First record.
-            record_b (Paper): Second record.
-            config (ScorePairConfig | None): Scoring configuration.
-            **kwargs: Additional keyword arguments passed to comparison methods.
-
-        Returns:
-            PairScoreResult with probability, per-field results, early-stop
-            reason, DOI mismatch flag, and suggested label.
-
-        """
+        """Score a pair and return a structured result."""
         config = config or ScorePairConfig()
+        kwargs = self._prepare_score_pair_kwargs(config, kwargs)
 
+        early_stop_result = self._build_early_stop_result(record_a, record_b)
+        if early_stop_result is not None:
+            return early_stop_result
+
+        fields_to_use = self._resolve_score_fields(config.weights, config.fields)
+        field_results, weighted_total = self._score_pair_fields(
+            record_a=record_a,
+            record_b=record_b,
+            fields_to_use=fields_to_use,
+            kwargs=kwargs,
+        )
+
+        if not self._has_compared_fields(field_results):
+            return self._build_unscorable_result(field_results)
+
+        probability = self._calculate_probability(weighted_total, config.intercept)
+        probability, doi_mismatch_adjustment_applied = self._apply_doi_mismatch_penalty(
+            record_a,
+            record_b,
+            probability,
+        )
+
+        threshold = settings.decision_threshold
+        label = (
+            PairLabel.DUPLICATE if probability >= threshold else PairLabel.NOT_DUPLICATE
+        )
+
+        return PairScoreResult(
+            probability=probability,
+            doi_mismatch_adjustment_applied=doi_mismatch_adjustment_applied,
+            field_results=field_results,
+            early_stop_reason=None,
+            label=label,
+        )
+
+    def _prepare_score_pair_kwargs(
+        self,
+        config: ScorePairConfig,
+        kwargs: dict[str, object],
+    ) -> dict[str, object]:
+        """Prepare kwargs for score_pair, extracting string distance algo."""
         string_distance_algorithm = (
             config.string_distance_algorithm or self.default_string_distance_algorithm
         )
-        weights = config.weights
-        intercept = config.intercept
-        fields = config.fields
         if string_distance_algorithm is None:
             string_distance_algorithm = self.default_string_distance_algorithm
 
-        kwargs = dict(kwargs)
-        kwargs["string_distance_algorithm"] = string_distance_algorithm
+        merged_kwargs = dict(kwargs)
+        merged_kwargs["string_distance_algorithm"] = string_distance_algorithm
+        return merged_kwargs
 
-        threshold = settings.decision_threshold
-
+    def _build_early_stop_result(
+        self,
+        record_a: Paper,
+        record_b: Paper,
+    ) -> PairScoreResult | None:
+        """Return early-stop result, with reason as PairScoreResult, or None if n/a."""
         early_stop_reason_str = self.should_early_stop(record_a, record_b)
-        if early_stop_reason_str is not None:
-            try:
-                early_stop_reason = EarlyStopReason(early_stop_reason_str)
-            except ValueError:
-                logger.warning(
-                    f"Unknown early-stop reason {early_stop_reason_str!r}; "
-                    "EarlyStopReason enum may be out of sync with early_stop.py"
-                )
-                early_stop_reason = None
-            return PairScoreResult(
-                probability=0.0,
-                doi_mismatch_adjustment_applied=False,
-                field_results={},
-                early_stop_reason=early_stop_reason,
-                label=PairLabel.NOT_DUPLICATE,
-            )
+        if early_stop_reason_str is None:
+            return None
 
+        try:
+            early_stop_reason = EarlyStopReason(early_stop_reason_str)
+        except ValueError:
+            logger.warning(
+                f"Unknown early-stop reason {early_stop_reason_str!r}; "
+                "EarlyStopReason enum may be out of sync with early_stop.py"
+            )
+            early_stop_reason = None
+
+        return PairScoreResult(
+            probability=0.0,
+            doi_mismatch_adjustment_applied=False,
+            field_results={},
+            early_stop_reason=early_stop_reason,
+            label=PairLabel.NOT_DUPLICATE,
+        )
+
+    @staticmethod
+    def _resolve_score_fields(
+        weights: dict[str, float],
+        fields: list[str] | None,
+    ) -> list[tuple[str, float]]:
+        """Resolve score fields."""
+        if fields is None:
+            return list(weights.items())
+        return [
+            (field_name, weights[field_name])
+            for field_name in fields
+            if field_name in weights
+        ]
+
+    def _score_pair_fields(
+        self,
+        record_a: Paper,
+        record_b: Paper,
+        fields_to_use: list[tuple[str, float]],
+        kwargs: dict[str, object],
+    ) -> tuple[dict[str, FieldResult], float]:
+        """Produce weighted field-level score."""
         field_results: dict[str, FieldResult] = {}
         weighted_total = 0.0
-
-        # Determine which fields to use
-        if fields is not None:
-            fields_to_use = [(f, weights[f]) for f in fields if f in weights]
-        else:
-            fields_to_use = list(weights.items())
 
         for field_name, weight in fields_to_use:
             val_a = getattr(record_a, field_name, None)
@@ -260,49 +311,58 @@ class Deduper:
                 f"weighted={match_score * weight:.4f}"
             )
 
-        any_compared = any(
-            fr.status == FieldStatus.COMPARED for fr in field_results.values()
-        )
-        if not any_compared:
-            return PairScoreResult(
-                probability=0.0,
-                doi_mismatch_adjustment_applied=False,
-                field_results=field_results,
-                early_stop_reason=None,
-                label=PairLabel.UNSCORABLE,
-                unscorable_reason="no_comparable_fields",
-            )
+        return field_results, weighted_total
 
-        raw_score = weighted_total + intercept
-        logger.debug(f"Raw score (before sigmoid): {raw_score:.4f}")
-        probability = 1 / (1 + exp(-raw_score))
-        logger.debug(f"Weighted dedup probability: {probability:.4f}")
+    @staticmethod
+    def _has_compared_fields(field_results: dict[str, FieldResult]) -> bool:
+        """Check if a given field has been compared."""
+        return any(fr.status == FieldStatus.COMPARED for fr in field_results.values())
 
-        # Apply DOI mismatch penalty if both DOIs are present and do not match
-        doi_a = getattr(record_a, "doi", None)
-        doi_b = getattr(record_b, "doi", None)
-        doi_mismatch_adjustment_applied = False
-        if doi_a is not None and doi_b is not None:
-            norm_a = normalise_doi(getattr(doi_a, "identifier", None))
-            norm_b = normalise_doi(getattr(doi_b, "identifier", None))
-            if norm_a and norm_b and norm_a != norm_b:
-                doi_mismatch_adjustment_applied = True
-                probability = probability * 0.9
-                logger.debug(
-                    f"DOI mismatch penalty applied: {norm_a} != {norm_b}, factor=0.9"
-                )
-
-        label = (
-            PairLabel.DUPLICATE if probability >= threshold else PairLabel.NOT_DUPLICATE
-        )
-
+    @staticmethod
+    def _build_unscorable_result(
+        field_results: dict[str, FieldResult],
+    ) -> PairScoreResult:
+        """Return a PairScoreResult object which was unscorable."""
         return PairScoreResult(
-            probability=probability,
-            doi_mismatch_adjustment_applied=doi_mismatch_adjustment_applied,
+            probability=0.0,
+            doi_mismatch_adjustment_applied=False,
             field_results=field_results,
             early_stop_reason=None,
-            label=label,
+            label=PairLabel.UNSCORABLE,
+            unscorable_reason="no_comparable_fields",
         )
+
+    @staticmethod
+    def _calculate_probability(weighted_total: float, intercept: float) -> float:
+        """Calculate weighted probability."""
+        raw_score = weighted_total + intercept
+        logger.debug(f"raw score (before sigmoid): {raw_score:.4f}")
+        probability = 1 / (1 + exp(-raw_score))
+        logger.debug(f"weighted dedupe probability: {probability:.4f}")
+        return probability
+
+    @staticmethod
+    def _apply_doi_mismatch_penalty(
+        record_a: Paper,
+        record_b: Paper,
+        probability: float,
+        doi_mismatch_penalty: float = DOI_MISMATCH_PENALTY,
+    ) -> tuple[float, bool]:
+        """Apply the doi mismatch penalty, given 2 records and probability."""
+        doi_a = getattr(record_a, "doi", None)
+        doi_b = getattr(record_b, "doi", None)
+        if doi_a is None or doi_b is None:
+            return probability, False
+
+        norm_a = normalise_doi(getattr(doi_a, "identifier", None))
+        norm_b = normalise_doi(getattr(doi_b, "identifier", None))
+        if norm_a and norm_b and norm_a != norm_b:
+            logger.debug(
+                f"DOI mismatch penalty applied: {norm_a} != {norm_b}, factor={doi_mismatch_penalty}"
+            )
+            return probability * doi_mismatch_penalty, True
+
+        return probability, False
 
     def compare_one_to_many(
         self,
