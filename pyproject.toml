@@ -95,7 +95,6 @@ build_command = """
 tag_format = "{version}"
 version_toml = ["pyproject.toml:project.version"]
 
-
 [tool.semantic_release.branches.main]
 match = "main"
 prerelease = false
