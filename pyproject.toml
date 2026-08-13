@@ -40,7 +40,7 @@ description = "A suite of tools for deduplicating DESTINY Works"
 name = "deduplication-toolkit"
 readme = "README.md"
 requires-python = ">=3.12.11"
-version = "0.1.0"
+version = "0.2.0"
 
 [tool.pytest.ini_options]
 addopts = ["--color=yes", "--import-mode=importlib", "--verbose"]
