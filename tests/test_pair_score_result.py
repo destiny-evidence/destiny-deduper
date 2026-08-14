@@ -114,7 +114,7 @@ def test_score_pair_normal_scoring_has_field_results(duplicate_pair):
     result = deduper.score_pair(paper_a, paper_b)
 
     assert len(result.field_results) > 0
-    for field_name, field_result in result.field_results.items():
+    for field_result in result.field_results.values():
         assert field_result.status in FieldStatus.__members__.values()
 
 
