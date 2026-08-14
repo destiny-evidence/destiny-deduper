@@ -13,7 +13,6 @@ from destiny_dedupe.pair_score_result import EarlyStopReason
 # is checked before it, and no rule produces the second at all.
 UNREACHABLE_EARLY_STOP_REASONS = {
     EarlyStopReason.EXACT_TITLE_WITH_STRUCTURAL_CONFLICT,
-    EarlyStopReason.YEAR_GAP_WITH_ABSTRACT_CONFLICT,
 }
 
 
