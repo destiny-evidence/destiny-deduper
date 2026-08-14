@@ -21,7 +21,6 @@ class EarlyStopReason(StrEnum):
     PARTIAL_RATIO_TOO_LOW = "partial_ratio_too_low"
     EXACT_TITLE_WITH_STRUCTURAL_CONFLICT = "exact_title_with_structural_conflict"
     TITLE_WITH_METADATA_MISMATCH = "title_with_metadata_mismatch"
-    YEAR_GAP_WITH_ABSTRACT_CONFLICT = "year_gap_with_abstract_conflict"
 
 
 class FieldStatus(StrEnum):
@@ -94,8 +93,9 @@ def get_library_info() -> LibraryInfo:
 
     try:
         pkg_version = _pkg_version("deduplication-toolkit")
-    except PackageNotFoundError:
-        raise PackageNotFoundError("Package 'deduplication-toolkit' is not installed.")
+    except PackageNotFoundError as e:
+        msg = "Package 'deduplication-toolkit' is not installed."
+        raise PackageNotFoundError(msg) from e
 
     scoring_config: dict[str, object] = {
         "weights": settings.weights.model_dump(),
