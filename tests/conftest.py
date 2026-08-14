@@ -28,6 +28,7 @@ from destiny_sdk.identifiers import (
 from destiny_sdk.references import Reference, ReferenceFileInput
 from destiny_sdk.visibility import Visibility
 from faker import Faker
+from loguru import logger
 from pydantic import HttpUrl
 
 from destiny_dedupe.algorithm.import_references import (
@@ -47,7 +48,7 @@ def generate_fake_annotations() -> list[Annotation]:
         Annotation: an annotation.
 
     """
-    return [
+    annotations = [
         BooleanAnnotation(
             scheme="ring",
             value=fa.boolean(),
@@ -57,6 +58,8 @@ def generate_fake_annotations() -> list[Annotation]:
         )
         for word in ["earth", "fire", "wind", "water", "heart"]
     ]
+    logger.debug("Generated {} fake annotations for fixture data", len(annotations))
+    return annotations
 
 
 def generate_fake_location_enhancement(
@@ -72,6 +75,9 @@ def generate_fake_location_enhancement(
         Annotation: an annotation
 
     """
+    logger.debug(
+        "Generating fake location enhancement for reference type: {}", reference_type
+    )
     EnhancementDataModel = Enhancement  # noqa: N806
     if reference_type == "file":
         EnhancementDataModel = EnhancementFileInput  # noqa: N806
@@ -129,6 +135,11 @@ def generate_fake_enhancements(
         list[Enhancement]: a list of enhacements.
 
     """
+    logger.debug(
+        "Generating fake enhancements for reference_type={} bib_content={}",
+        reference_type,
+        bib_content,
+    )
     EnhancementDataModel = Enhancement  # noqa: N806
     if reference_type == "file":
         EnhancementDataModel = EnhancementFileInput  # noqa: N806
@@ -324,6 +335,11 @@ def generate_reference_jsonl_string(*, valid: bool = True) -> str:
     if not valid:
         data.pop("identifiers", None)
 
+    logger.debug(
+        "Built reference JSONL fixture with valid={} and identifiers={}",
+        valid,
+        bool(data.get("identifiers")),
+    )
     return json.dumps(data)
 
 
