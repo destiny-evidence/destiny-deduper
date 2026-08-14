@@ -1,4 +1,6 @@
+import csv
 import json
+from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
@@ -28,6 +30,10 @@ from destiny_sdk.visibility import Visibility
 from faker import Faker
 from pydantic import HttpUrl
 
+from destiny_dedupe.algorithm.import_references import (
+    CsvLoadConfig,
+    load_reference_csv,
+)
 from destiny_dedupe.data_models import Paper
 
 fa = Faker()
@@ -394,3 +400,46 @@ def valid_paper_instance():
         publisher="Createspace Independent Publishing Platform",
         year=2011,
     )
+
+
+FIXTURE_DIR = Path(__file__).parent / "fixtures"
+
+
+def _load_fixture_pairs() -> list[dict]:
+    with (FIXTURE_DIR / "pairs.csv").open(newline="") as fh:
+        return list(csv.DictReader(fh))
+
+
+def pytest_generate_tests(metafunc):
+    """Parametrise fixture-driven tests, one case per pair in pairs.csv."""
+    if "fixture_pair" in metafunc.fixturenames:
+        pairs = _load_fixture_pairs()
+        metafunc.parametrize("fixture_pair", pairs, ids=[p["pair_id"] for p in pairs])
+    if "csv_fixture_pair" in metafunc.fixturenames:
+        pairs = [p for p in _load_fixture_pairs() if "csv" in p["paths"]]
+        metafunc.parametrize(
+            "csv_fixture_pair", pairs, ids=[p["pair_id"] for p in pairs]
+        )
+
+
+@pytest.fixture(scope="session")
+def fixture_pairs() -> list[dict]:
+    """Every fixture pair, as rows from pairs.csv."""
+    return _load_fixture_pairs()
+
+
+@pytest.fixture(scope="session")
+def fixture_papers() -> dict[int, Paper]:
+    """Every fixture record, built directly from the stored Paper fields."""
+    stored = json.loads((FIXTURE_DIR / "papers.json").read_text())
+    return {int(record_id): Paper(**fields) for record_id, fields in stored.items()}
+
+
+@pytest.fixture(scope="session")
+def csv_fixture_papers() -> dict[int, Paper]:
+    """Load the same records through the CSV import path."""
+    papers = load_reference_csv(
+        FIXTURE_DIR / "records.csv",
+        CsvLoadConfig(include_record_id=True),
+    )
+    return {paper.recordid: paper for paper in papers}

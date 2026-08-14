@@ -1,0 +1,15 @@
+pair_id,record_id_a,record_id_b,paths,target_path,expected_label,expected_early_stop_reason,expected_doi_mismatch_adjustment,expected_probability
+ES-01,1,2,"paper,csv",early_stop:doi_and_pages_mismatch,not_duplicate,doi_and_pages_mismatch,false,0.000000
+ES-02,3,4,"paper,csv",early_stop:doi_pub_version_mismatch,not_duplicate,doi_pub_version_mismatch,false,0.000000
+ES-03,5,6,"paper,csv",early_stop:part_number_mismatch,not_duplicate,part_number_mismatch,false,0.000000
+ES-04,7,8,"paper,csv",early_stop:partial_ratio_too_low,not_duplicate,partial_ratio_too_low,false,0.000000
+ES-05,9,10,"paper,csv",early_stop:title_with_metadata_mismatch,not_duplicate,title_with_metadata_mismatch,false,0.000000
+ES-06,11,12,"paper,csv","scored:wide year gap, no abstracts to disambiguate",not_duplicate,,false,0.019506
+SC-01,13,14,"paper,csv","scored:high probability, matching DOIs, no DOI adjustment",duplicate,,false,0.999874
+SC-02,15,16,"paper,csv","scored:low probability, no early stop",not_duplicate,,false,0.102817
+SC-03,17,18,"paper,csv",scored:DOI mismatch adjustment applied,not_duplicate,,true,0.833009
+FS-01,19,20,"paper,csv",field:present on B only,not_duplicate,,false,0.340870
+FS-02,21,22,"paper,csv",field:present on A only,not_duplicate,,false,0.340870
+FS-03,23,24,"paper,csv",field:absent on both,not_duplicate,,false,0.340870
+ID-01,25,26,paper,identifier:PubMed id on both records,not_duplicate,,false,0.011536
+ID-02,27,28,paper,identifier:ISBN on both records,not_duplicate,,false,0.011536
