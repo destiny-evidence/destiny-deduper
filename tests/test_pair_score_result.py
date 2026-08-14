@@ -117,6 +117,12 @@ def test_score_pair_normal_scoring_has_field_results(duplicate_pair):
     for field_result in result.field_results.values():
         assert field_result.status in FieldStatus.__members__.values()
 
+    pages_result = result.field_results["pages"]
+    assert pages_result.normalised_value_a == "1-10"
+    assert pages_result.normalised_value_b == "1-10"
+    assert pages_result.score == 1.0
+    assert "intercept" not in result.field_results
+
 
 def test_score_pair_duplicate_label(duplicate_pair):
     """Papers with identical titles and metadata should score as duplicates."""

@@ -19,6 +19,7 @@ from destiny_dedupe.normalisers import (
     strip_doi_punctuation,
 )
 from destiny_dedupe.pair_score_result import (
+    ComparisonOutput,
     EarlyStopReason,
     FieldResult,
     FieldStatus,
@@ -140,8 +141,8 @@ class Deduper:
             try:
                 logger.debug(f"comparison_method: {compare_method}")
                 logger.debug(f"overall_kwargs: {kwargs}")
-                score = compare_method(record_a, record_b, **kwargs)
-                scores[field] = score
+                comparison = compare_method(record_a, record_b, **kwargs)
+                scores[field] = comparison.score
             except NotImplementedError as e:
                 logger.error(
                     f"method {compare_method} is not yet implemented. skipping."
@@ -248,11 +249,15 @@ class Deduper:
     ) -> list[tuple[str, float]]:
         """Resolve score fields."""
         if fields is None:
-            return list(weights.items())
+            return [
+                (field_name, weight)
+                for field_name, weight in weights.items()
+                if field_name != "intercept"
+            ]
         return [
             (field_name, weights[field_name])
             for field_name in fields
-            if field_name in weights
+            if field_name in weights and field_name != "intercept"
         ]
 
     def _score_pair_fields(
@@ -294,7 +299,7 @@ class Deduper:
                 continue
 
             try:
-                match_score = compare_method(record_a, record_b, **kwargs)
+                comparison = compare_method(record_a, record_b, **kwargs)
             except (ValueError, TypeError, AttributeError) as e:
                 logger.error(f"Error comparing {field_name}: {e}")
                 continue
@@ -303,12 +308,14 @@ class Deduper:
                 status=FieldStatus.COMPARED,
                 value_a=str(val_a),
                 value_b=str(val_b),
-                score=match_score,
+                normalised_value_a=comparison.normalised_value_a,
+                normalised_value_b=comparison.normalised_value_b,
+                score=comparison.score,
             )
-            weighted_total += match_score * weight
+            weighted_total += comparison.score * weight
             logger.debug(
-                f"{field_name}: match_score={match_score:.4f}, weight={weight}, "
-                f"weighted={match_score * weight:.4f}"
+                f"{field_name}: match_score={comparison.score:.4f}, weight={weight}, "
+                f"weighted={comparison.score * weight:.4f}"
             )
 
         return field_results, weighted_total
@@ -363,6 +370,19 @@ class Deduper:
             return probability * doi_mismatch_penalty, True
 
         return probability, False
+
+    @staticmethod
+    def _comparison_output(
+        normalised_value_a: str,
+        normalised_value_b: str,
+        score: float,
+    ) -> ComparisonOutput:
+        """Build a structured result from normalized values and a score."""
+        return ComparisonOutput(
+            normalised_value_a=normalised_value_a,
+            normalised_value_b=normalised_value_b,
+            score=score,
+        )
 
     def compare_one_to_many(
         self,
@@ -466,9 +486,9 @@ class Deduper:
                 continue
 
             try:
-                score = compare_method(record_a, record_b, **kwargs)
-                scores[field] = score
-                logger.debug(f"Score for {field}: {score}")
+                comparison = compare_method(record_a, record_b, **kwargs)
+                scores[field] = comparison.score
+                logger.debug(f"Score for {field}: {comparison.score}")
             except (ValueError, TypeError, AttributeError) as e:
                 logger.error(f"Error comparing {field}: {e}")
                 continue
@@ -530,6 +550,9 @@ class Deduper:
 
         weighted_scores = {}
         for field, weight in weights.items():
+            if field == "intercept":
+                continue
+
             # check if both records have field from weights
             val_a = getattr(record_a, field, None)
             val_b = getattr(record_b, field, None)
@@ -549,8 +572,8 @@ class Deduper:
                 continue
 
             try:
-                match_score = compare_method(record_a, record_b, **kwargs)
-                weighted_score = match_score * weight
+                comparison = compare_method(record_a, record_b, **kwargs)
+                weighted_score = comparison.score * weight
                 weighted_scores[field] = weighted_score
             except (ValueError, TypeError, AttributeError) as e:
                 logger.error(f"Error comparing {field}: {e}")
@@ -605,7 +628,7 @@ class Deduper:
         record_a: Paper,
         record_b: Paper,
         **kwargs,
-    ) -> float:
+    ) -> ComparisonOutput:
         """
         Compare DOIs between two records (exact match after normalization).
 
@@ -613,18 +636,18 @@ class Deduper:
             float: 1.0 if DOIs match, 0.0 otherwise
 
         """
-        doi_a = normalise_doi(getattr(record_a.doi, "identifier", None))
-        doi_b = normalise_doi(getattr(record_b.doi, "identifier", None))
+        doi_a = normalise_doi(getattr(record_a.doi, "identifier", None)) or ""
+        doi_b = normalise_doi(getattr(record_b.doi, "identifier", None)) or ""
 
         if not doi_a or not doi_b:
-            return 0.0
-        if doi_a == doi_b:
-            return 1.0
-        # Fallback: strip punctuation from suffix to catch variants like
-        # missing dots (100B3.BJJ vs 100B3BJJ) or _ vs - substitution.
-        if strip_doi_punctuation(doi_a) == strip_doi_punctuation(doi_b):
-            return 1.0
-        return 0.0
+            score = 0.0
+        elif doi_a == doi_b or strip_doi_punctuation(doi_a) == strip_doi_punctuation(
+            doi_b
+        ):
+            score = 1.0
+        else:
+            score = 0.0
+        return self._comparison_output(doi_a, doi_b, score)
 
     def compare_openalex_id(
         self,
@@ -632,7 +655,7 @@ class Deduper:
         record_b: Paper,
         method: Literal["string_match", "http", "both"] = "string_match",
         **kwargs,
-    ) -> float:
+    ) -> ComparisonOutput:
         """
         Compare two openalex ids.
 
@@ -649,30 +672,35 @@ class Deduper:
             float: between 0 and 1.
 
         """
-        if record_a.openalex_id is None or record_b.openalex_id is None:
-            return 0.0
-
         openalex_id_a_str = (
-            record_a.openalex_id.identifier
-        )  # should have openalex url removed
-        openalex_id_b_str = record_b.openalex_id.identifier
+            str(record_a.openalex_id.identifier) if record_a.openalex_id else ""
+        )
+        openalex_id_b_str = (
+            str(record_b.openalex_id.identifier) if record_b.openalex_id else ""
+        )
 
         if method == "string_match":
             # NOTE - does this even make sense? i think this is what @kaitlynhair code is doing
             # but does approximate string similarity imply similarity of the
             # underlying record, or should we just do a == b comparison?
-            return Deduper.calculate_string_distance(
-                openalex_id_a_str, openalex_id_b_str, **kwargs
+            score = (
+                Deduper.calculate_string_distance(
+                    openalex_id_a_str, openalex_id_b_str, **kwargs
+                )
+                if openalex_id_a_str and openalex_id_b_str
+                else 0.0
             )
+            return self._comparison_output(openalex_id_a_str, openalex_id_b_str, score)
 
-        not_implemented_err_msg = f"method {method} is not yet implemented."
-        raise NotImplementedError(not_implemented_err_msg)
+        not_implemented_error = f"method {method} is not yet implemented."
+        raise NotImplementedError(not_implemented_error)
 
     def compare_pubmed_id(
         self,
         record_a: Paper,
         record_b: Paper,
-    ) -> float:
+        **kwargs,
+    ) -> ComparisonOutput:
         """
         Compare two pubmed ids.
 
@@ -685,15 +713,27 @@ class Deduper:
             float: _description_
 
         """
-        if record_a.pubmed_id is None or record_b.pubmed_id is None:
-            return 0.0
+        pubmed_id_a_str = (
+            str(record_a.pubmed_id.identifier) if record_a.pubmed_id else ""
+        )
+        pubmed_id_b_str = (
+            str(record_b.pubmed_id.identifier) if record_b.pubmed_id else ""
+        )
+        return self._comparison_output(
+            pubmed_id_a_str,
+            pubmed_id_b_str,
+            float(
+                bool(
+                    pubmed_id_a_str
+                    and pubmed_id_b_str
+                    and pubmed_id_a_str == pubmed_id_b_str
+                )
+            ),
+        )
 
-        pubmed_id_a_str = record_a.pubmed_id.identifier
-        pubmed_id_b_str = record_b.pubmed_id.identifier
-
-        return float(pubmed_id_a_str == pubmed_id_b_str)
-
-    def compare_isbn(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_isbn(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 ISBNs after normalization.
 
@@ -701,14 +741,17 @@ class Deduper:
             float: 1.0 if equal, 0.0 otherwise.
 
         """
-        isbn_a = normalise_isbn(record_a.isbn)
-        isbn_b = normalise_isbn(record_b.isbn)
+        isbn_a = normalise_isbn(str(record_a.isbn)) if record_a.isbn else ""
+        isbn_b = normalise_isbn(str(record_b.isbn)) if record_b.isbn else ""
+        return self._comparison_output(
+            isbn_a or "",
+            isbn_b or "",
+            float(bool(isbn_a and isbn_b and isbn_a == isbn_b)),
+        )
 
-        if not isbn_a or not isbn_b:
-            return 0.0
-        return 1.0 if isbn_a == isbn_b else 0.0
-
-    def compare_authors(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_authors(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare two lists of authors.
 
@@ -723,7 +766,7 @@ class Deduper:
         """
         if not record_a.authors or not record_b.authors:
             logger.warning("One or both records have no authors.")
-            return 0.0
+            return self._comparison_output("", "", 0.0)
 
         try:
             authors_a = ", ".join(
@@ -748,22 +791,28 @@ class Deduper:
             )
         except AttributeError as e:
             logger.error(f"Error extracting authors: {e}")
-            return 0.0
+            return self._comparison_output("", "", 0.0)
 
         # Return 0 if either authors list is empty
         if not authors_a or not authors_b:
             logger.warning("One or both authors lists are empty after extraction.")
-            return 0.0
+            return self._comparison_output(authors_a, authors_b, 0.0)
 
         # Allow override algorithm via kwargs, fallback to Jaro-Winkler
         algo = kwargs.get(
             "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
         )
-        return Deduper.calculate_string_distance(
-            authors_a, authors_b, string_distance_algorithm=algo
+        return self._comparison_output(
+            authors_a,
+            authors_b,
+            Deduper.calculate_string_distance(
+                authors_a, authors_b, string_distance_algorithm=algo
+            ),
         )
 
-    def compare_title(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_title(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare two titles using Levenshtein distance (case-insensitive),
         with special handling for alternative-language or subtitle segments.
@@ -773,7 +822,11 @@ class Deduper:
         """
         # Return 0 if either title is missing
         if not record_a.title or not record_b.title:
-            return 0.0
+            return self._comparison_output(
+                (record_a.title or "").strip().lower(),
+                (record_b.title or "").strip().lower(),
+                0.0,
+            )
 
         a_full = record_a.title.strip().lower()
         b_full = record_b.title.strip().lower()
@@ -802,15 +855,19 @@ class Deduper:
                 b_first,
                 string_distance_algorithm=StringDistanceAlgorithm.LEVENSHTEIN,
             )
-            return max(full_sim, seg_sim)
+            full_sim = max(full_sim, seg_sim)
 
-        return full_sim
+        return self._comparison_output(a_full, b_full, full_sim)
 
-    def compare_titles(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_titles(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """Backward-compatible alias for compare_title."""
         return self.compare_title(record_a, record_b, **kwargs)
 
-    def compare_year(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_year(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 years.
 
@@ -827,28 +884,43 @@ class Deduper:
 
         """
         if record_a.year is None or record_b.year is None:
-            return 0.0
+            return self._comparison_output(
+                "" if record_a.year is None else str(record_a.year),
+                "" if record_b.year is None else str(record_b.year),
+                0.0,
+            )
 
         year_a = record_a.year
         year_b = record_b.year
-        return float(year_a == year_b)
+        return self._comparison_output(
+            str(year_a), str(year_b), float(year_a == year_b)
+        )
 
-    def compare_journal(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_journal(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare two journal names using Jaro-Winkler distance.
         Returns a float between 0 and 1.
         """
         # Return 0 if either journal is missing
         if not record_a.journal or not record_b.journal:
-            return 0.0
+            return self._comparison_output(
+                (record_a.journal or "").strip(),
+                (record_b.journal or "").strip(),
+                0.0,
+            )
 
         # Allow override algorithm via kwargs, fallback to Jaro-Winkler
         algo = kwargs.get(
             "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
         )
 
+        journal_a = record_a.journal.strip()
+        journal_b = record_b.journal.strip()
+
         score = Deduper.calculate_string_distance(
-            record_a.journal, record_b.journal, string_distance_algorithm=algo
+            journal_a, journal_b, string_distance_algorithm=algo
         )
 
         # If the raw similarity is low, check whether one name is an abbreviation
@@ -856,13 +928,15 @@ class Deduper:
         # When an abbreviation match is detected, return a fixed score of 0.85 so
         # downstream veto rules don't incorrectly flag these as mismatches.
         if score < JOURNAL_ABBREVIATION_THRESHOLD and is_journal_abbreviation_match(
-            record_a.journal, record_b.journal
+            journal_a, journal_b
         ):
-            return 0.85
+            score = 0.85
 
-        return score
+        return self._comparison_output(journal_a, journal_b, score)
 
-    def compare_publisher(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_publisher(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare two publisher names using string distance.
 
@@ -875,14 +949,24 @@ class Deduper:
 
         """
         if record_a.publisher is None or record_b.publisher is None:
-            return 0.0
+            return self._comparison_output(
+                (record_a.publisher or "").strip().lower(),
+                (record_b.publisher or "").strip().lower(),
+                0.0,
+            )
 
         publisher_a = record_a.publisher.lower().strip()
         publisher_b = record_b.publisher.lower().strip()
 
-        return Deduper.calculate_string_distance(publisher_a, publisher_b, **kwargs)
+        return self._comparison_output(
+            publisher_a,
+            publisher_b,
+            Deduper.calculate_string_distance(publisher_a, publisher_b, **kwargs),
+        )
 
-    def compare_pages(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_pages(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 sets of page delineations.
         Returns 1.0 if canonicalized page values match, 0.0 otherwise.
@@ -896,43 +980,69 @@ class Deduper:
 
         """
         if record_a.pages is None or record_b.pages is None:
-            return 0.0
+            return self._comparison_output(
+                normalise_pages(record_a.pages) or "",
+                normalise_pages(record_b.pages) or "",
+                0.0,
+            )
 
         pages_a = normalise_pages(record_a.pages)
         pages_b = normalise_pages(record_b.pages)
-        return float(pages_a == pages_b)
+        return self._comparison_output(
+            pages_a or "",
+            pages_b or "",
+            float(bool(pages_a and pages_b and pages_a == pages_b)),
+        )
 
-    def compare_volume(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_volume(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 sets of volumes,
         using Jaro-Winkler distance.
         """
         if not record_a.volume or not record_b.volume:
-            return 0.0
+            return self._comparison_output(
+                record_a.volume or "", record_b.volume or "", 0.0
+            )
 
         algo = kwargs.get(
             "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
         )
-        return Deduper.calculate_string_distance(
-            record_a.volume, record_b.volume, string_distance_algorithm=algo
+        return self._comparison_output(
+            record_a.volume,
+            record_b.volume,
+            Deduper.calculate_string_distance(
+                record_a.volume, record_b.volume, string_distance_algorithm=algo
+            ),
         )
 
-    def compare_issue(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_issue(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 sets of issues,
         using Jaro-Winkler distance.
         """
         if not record_a.issue or not record_b.issue:
-            return 0.0
+            return self._comparison_output(
+                record_a.issue or "", record_b.issue or "", 0.0
+            )
 
         algo = kwargs.get(
             "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
         )
-        return Deduper.calculate_string_distance(
-            record_a.issue, record_b.issue, string_distance_algorithm=algo
+        return self._comparison_output(
+            record_a.issue,
+            record_b.issue,
+            Deduper.calculate_string_distance(
+                record_a.issue, record_b.issue, string_distance_algorithm=algo
+            ),
         )
 
-    def compare_issn(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_issn(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 ISSN strings.
         Returns 1.0 if exact match, 0.0 otherwise.
@@ -946,9 +1056,15 @@ class Deduper:
 
         """
         if record_a.issn is None or record_b.issn is None:
-            return 0.0
+            return self._comparison_output(
+                record_a.issn or "", record_b.issn or "", 0.0
+            )
 
-        return float(record_a.issn == record_b.issn)
+        return self._comparison_output(
+            record_a.issn,
+            record_b.issn,
+            float(record_a.issn == record_b.issn),
+        )
 
     @staticmethod
     def calculate_string_distance(

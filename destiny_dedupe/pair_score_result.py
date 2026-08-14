@@ -40,6 +40,16 @@ class PairLabel(StrEnum):
     UNSCORABLE = "unscorable"
 
 
+class ComparisonOutput(BaseModel):
+    """Result returned by an individual field comparator."""
+
+    model_config = ConfigDict(frozen=True)
+
+    normalised_value_a: str
+    normalised_value_b: str
+    score: float
+
+
 class FieldResult(BaseModel):
     """Result of comparing a single field for a scored pair."""
 
@@ -48,6 +58,8 @@ class FieldResult(BaseModel):
     status: FieldStatus
     value_a: str | None = None
     value_b: str | None = None
+    normalised_value_a: str | None = None
+    normalised_value_b: str | None = None
     score: float | None = None
 
 

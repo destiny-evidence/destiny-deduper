@@ -71,7 +71,7 @@ def check_doi_pages_mismatch(ctx: ComparisonContext) -> bool:
         norm_doi_a = normalise_doi(getattr(ctx.record_a.doi, "identifier", None))
         norm_doi_b = normalise_doi(getattr(ctx.record_b.doi, "identifier", None))
         doi_match = norm_doi_a == norm_doi_b if (norm_doi_a and norm_doi_b) else True
-        pages_match = ctx.deduper.compare_pages(ctx.record_a, ctx.record_b) == 1.0
+        pages_match = ctx.deduper.compare_pages(ctx.record_a, ctx.record_b).score == 1.0
 
         if not doi_match and not pages_match:
             logger.debug("Early stop: DOI and PAGES both don't match")
@@ -178,13 +178,13 @@ def check_title_match_with_structural_conflict(ctx: ComparisonContext) -> bool:
             journal_mismatch = (
                 ctx.record_a.journal is not None
                 and ctx.record_b.journal is not None
-                and ctx.deduper.compare_journal(ctx.record_a, ctx.record_b)
+                and ctx.deduper.compare_journal(ctx.record_a, ctx.record_b).score
                 < JOURNAL_MISMATCH_THRESHOLD
             )
             pages_mismatch = (
                 ctx.record_a.pages is not None
                 and ctx.record_b.pages is not None
-                and ctx.deduper.compare_pages(ctx.record_a, ctx.record_b)
+                and ctx.deduper.compare_pages(ctx.record_a, ctx.record_b).score
                 < PAPER_MISMATCH_THRESHOLD
             )
             if journal_mismatch and pages_mismatch:
@@ -207,7 +207,7 @@ def check_title_and_metadata_mismatch(ctx: ComparisonContext) -> bool:
          (below TITLE_SIM_THRESHOLD_LOWER), it counts as an additional
          mismatch, making the veto easier to trigger.
     """
-    title_sim = ctx.deduper.compare_title(ctx.record_a, ctx.record_b)
+    title_sim = ctx.deduper.compare_title(ctx.record_a, ctx.record_b).score
 
     # Extremely different titles -> definitely not duplicates.
     if title_sim < TITLE_VETO_THRESHOLD:
