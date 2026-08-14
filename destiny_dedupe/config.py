@@ -11,8 +11,10 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONFIG_FILE_PATH = PROJECT_ROOT / "config.yaml"
+# Resolved inside the package so the file is found from an installed copy, not
+# only from a source checkout.
+PACKAGE_ROOT = Path(__file__).resolve().parent
+CONFIG_FILE_PATH = PACKAGE_ROOT / "config.yaml"
 
 
 class TitleThresholds(BaseModel):
