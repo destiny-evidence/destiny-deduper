@@ -1,6 +1,7 @@
 """Module for handling import references and data processing."""
 
 import math
+import numbers
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -40,6 +41,10 @@ def _parse_nan_string(v: str | float | None) -> str | None:
     if isinstance(v, str):
         v = v.strip()
         return v or None
+    if isinstance(v, numbers.Real):
+        # pandas types a numeric issue or volume column as int64 or float64, so
+        # anything but str returning None silently dropped those values.
+        return str(int(v)) if float(v).is_integer() else str(v)
     return None
 
 
