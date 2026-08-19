@@ -1,4 +1,4 @@
-"""Normalization functions for paper metadata fields."""
+"""Normalisation functions for paper metadata fields."""
 
 import re
 

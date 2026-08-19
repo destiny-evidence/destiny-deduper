@@ -56,6 +56,7 @@ lint.ignore = [
     "ANN003", # kwargs type annotation required
     "ARG002", # kwargs unused
     "COM812", # trailing commas (ruff-format recommended)
+    "CPY001", # copyright notice... bit OTT atm, copyright is in repo
     "D104", # module docstring
     "D203", # no-blank-line-before-class
     "D205", # missing-blank-line-after-summary

@@ -25,6 +25,9 @@ def test_normalise_column_name_removes_separators_and_lowercases():
         ("   ", None),
         ("  text  ", "text"),
         ("text", "text"),
+        (10325, "10325"),
+        (10325.0, "10325"),
+        (12.5, "12.5"),
     ],
 )
 def test_parse_nan_string(value, expected):
@@ -257,3 +260,15 @@ def test_load_reference_csv_raises_unicode_decode_error_when_all_encodings_fail(
 
     with pytest.raises(UnicodeDecodeError, match="Unable to decode CSV"):
         import_references.load_reference_csv(csv_path, config)
+
+
+def test_load_reference_csv_keeps_numeric_issue_and_volume(tmp_path):
+    # pandas types these columns as int64 or float64, never str, so a numeric
+    # issue or volume was dropped on the way into the Paper.
+    csv_path = tmp_path / "records.csv"
+    csv_path.write_text("title,year,issue,volume\nA study of things,2020,10325,12\n")
+
+    papers = import_references.load_reference_csv(csv_path)
+
+    assert papers[0].issue == "10325"
+    assert papers[0].volume == "12"

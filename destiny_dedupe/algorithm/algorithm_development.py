@@ -127,7 +127,7 @@ def compare_target_fields(
         compare_method = getattr(deduper, f"compare_{field}", None)
         if compare_method:
             try:
-                scores[field] = compare_method(record_a, record_b)
+                scores[field] = compare_method(record_a, record_b).score
             except Exception as e:  # noqa: BLE001
                 scores[field] = None
                 logger.warning(f"compare_{field} failed: {e}")

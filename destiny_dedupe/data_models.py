@@ -4,7 +4,6 @@ import re
 from typing import Self
 
 from destiny_sdk.enhancements import (
-    AbstractContentEnhancement,
     Authorship,
     BibliographicMetadataEnhancement,
     Location,
@@ -40,7 +39,6 @@ class Paper(BaseModel):
     pages: str | None = Field(default=None)
     volume: str | None = Field(default=None)
     issue: str | None = Field(default=None)
-    abstract: str | None = Field(default=None)
 
     @classmethod
     @field_validator("issn", mode="before")
@@ -131,7 +129,6 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
     bib_enh: BibliographicMetadataEnhancement | None = None
     loc_enh: list[Location] | None = None
     loc_enh_extra: dict | None = None
-    abstract: str | None = None
     if ref.enhancements:
         logger.debug(f"n enhancements: {len(ref.enhancements)}")
         for i, enh in enumerate(ref.enhancements):
@@ -146,9 +143,6 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
                 bib_enh = enh_content
                 continue
 
-            if isinstance(enh_content, AbstractContentEnhancement):
-                abstract = enh_content.abstract
-                continue
     title = bib_enh.title if bib_enh else None
     authors = bib_enh.authorship if bib_enh else None
     year = bib_enh.publication_year if bib_enh else None
@@ -189,5 +183,4 @@ def convert_ref_to_paper(ref: ReferenceFileInput | Reference) -> Paper:
         pages=pages,
         volume=volume,
         issue=issue,
-        abstract=abstract,
     )
