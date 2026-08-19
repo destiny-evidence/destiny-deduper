@@ -31,7 +31,7 @@ dependencies = [
     "jellyfish>=1.2.0",
     "loguru>=0.7.3",
     "pydantic-extra-types>=2.10.5",
-    "pydantic-settings>=2.10.1",
+    "pydantic-settings[yaml]>=2.10.1",
     "pydantic>=2.11.7",
     "python-semantic-release>=10.6.1",
     "rapidfuzz>=3.14.5",
@@ -74,7 +74,9 @@ lint.ignore = [
 lint.per-file-ignores = {"tests*" = [
     "ANN001", # No return type annotation
     "ANN201", # No return type annotation
+    "ANN202", # no return type ann for private funcs
     "ARG001", # Unused function argument
+    "ARG005", # kwargs and args unused
     "D100", # Missing docstring in public module
     "D103", # Missing docstring in public function
     "INP001", # File is part of an implicit namespace package.
@@ -102,6 +104,9 @@ prerelease = false
 
 [tool.setuptools]
 package-dir = {"" = "."}
+
+[tool.setuptools.package-data]
+destiny_dedupe = [".config.yaml"]
 
 [tool.setuptools.packages.find]
 exclude = ["misc*", "notebooks*", "tests*"]
