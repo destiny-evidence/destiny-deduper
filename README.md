@@ -54,3 +54,5 @@ All commits must use [**conventional commits**](conventionalcommits.org). The pr
 | `feat:` | `feat: add login page` | minor: `0.1.0 -> 0.2.0` |
 | `feat!:` or `BREAKING CHANGE:` footer | `feat!: remove legacy api` | major: `0.1.0 -> 1.0.0` |
 | `chore:`, `docs:`, `ci:`, `test:` | `chore: update deps` | no bump |
+
+we will udpate some stuff here!
