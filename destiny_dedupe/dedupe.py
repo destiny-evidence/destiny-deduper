@@ -1,6 +1,5 @@
 """Deduplication workflow, in main class `Deduper` with various algorithms."""
 
-import re
 from enum import StrEnum, auto
 from math import exp
 from typing import Literal
@@ -19,9 +18,16 @@ from destiny_dedupe.normalisers import (
     normalise_pages,
     strip_doi_punctuation,
 )
+from destiny_dedupe.pair_score_result import (
+    ComparisonOutput,
+    EarlyStopReason,
+    FieldResult,
+    FieldStatus,
+    PairLabel,
+    PairScoreResult,
+)
 from destiny_dedupe.utils import (
     contains_language_name,
-    extract_abstract_numbers,
     is_journal_abbreviation_match,
     split_title_segments,
 )
@@ -31,7 +37,7 @@ settings = get_settings()
 # constants
 WEIGHTS = settings.weights.model_dump()
 INTERCEPT: float = settings.weights.intercept
-ABSTRACT_SIMILARITY_THRESHOLD = settings.thresholds.abstract.similarity
+DOI_MISMATCH_PENALTY = settings.doi_mismatch_penalty
 JOURNAL_ABBREVIATION_THRESHOLD = settings.thresholds.journal.abbreviation
 
 
@@ -135,8 +141,8 @@ class Deduper:
             try:
                 logger.debug(f"comparison_method: {compare_method}")
                 logger.debug(f"overall_kwargs: {kwargs}")
-                score = compare_method(record_a, record_b, **kwargs)
-                scores[field] = score
+                comparison = compare_method(record_a, record_b, **kwargs)
+                scores[field] = comparison.score
             except NotImplementedError as e:
                 logger.error(
                     f"method {compare_method} is not yet implemented. skipping."
@@ -153,95 +159,230 @@ class Deduper:
         record_b: Paper,
         config: ScorePairConfig | None = None,
         **kwargs,
-    ) -> tuple[float, dict[str, float], str | None]:
-        """
-        Score a pair once and return both the probability, per-field matches, and early-stop reason.
-        Optionally restrict to a subset of fields.
-
-        Args:
-            record_a (Paper): First record.
-            record_b (Paper): Second record.
-            string_distance_algorithm: Algorithm to use.
-            weights: Field weights.
-            intercept: Intercept for logistic regression.
-            fields: List of fields to use (if None, use all in weights).
-
-        Returns:
-            tuple: (probability, field_scores, early_stop_reason)
-                   early_stop_reason is None if no early stop triggered.
-
-        """
+    ) -> PairScoreResult:
+        """Score a pair and return a structured result."""
         config = config or ScorePairConfig()
+        kwargs = self._prepare_score_pair_kwargs(config, kwargs)
 
+        early_stop_result = self._build_early_stop_result(record_a, record_b)
+        if early_stop_result is not None:
+            return early_stop_result
+
+        fields_to_use = self._resolve_score_fields(config.weights, config.fields)
+        field_results, weighted_total = self._score_pair_fields(
+            record_a=record_a,
+            record_b=record_b,
+            fields_to_use=fields_to_use,
+            kwargs=kwargs,
+        )
+
+        if not self._has_compared_fields(field_results):
+            return self._build_unscorable_result(field_results)
+
+        probability = self._calculate_probability(weighted_total, config.intercept)
+        probability, doi_mismatch_adjustment_applied = self._apply_doi_mismatch_penalty(
+            record_a,
+            record_b,
+            probability,
+        )
+
+        threshold = settings.decision_threshold
+        label = (
+            PairLabel.DUPLICATE if probability >= threshold else PairLabel.NOT_DUPLICATE
+        )
+
+        return PairScoreResult(
+            probability=probability,
+            doi_mismatch_adjustment_applied=doi_mismatch_adjustment_applied,
+            field_results=field_results,
+            early_stop_reason=None,
+            label=label,
+        )
+
+    def _prepare_score_pair_kwargs(
+        self,
+        config: ScorePairConfig,
+        kwargs: dict[str, object],
+    ) -> dict[str, object]:
+        """Prepare kwargs for score_pair, extracting string distance algo."""
         string_distance_algorithm = (
             config.string_distance_algorithm or self.default_string_distance_algorithm
         )
-        weights = config.weights
-        intercept = config.intercept
-        fields = config.fields
         if string_distance_algorithm is None:
             string_distance_algorithm = self.default_string_distance_algorithm
 
-        kwargs = dict(kwargs)
-        kwargs["string_distance_algorithm"] = string_distance_algorithm
+        merged_kwargs = dict(kwargs)
+        merged_kwargs["string_distance_algorithm"] = string_distance_algorithm
+        return merged_kwargs
 
-        early_stop_reason = self.should_early_stop(record_a, record_b)
-        if early_stop_reason is not None:
-            return 0.0, {}, early_stop_reason
+    def _build_early_stop_result(
+        self,
+        record_a: Paper,
+        record_b: Paper,
+    ) -> PairScoreResult | None:
+        """Return early-stop result, with reason as PairScoreResult, or None if n/a."""
+        early_stop_reason_str = self.should_early_stop(record_a, record_b)
+        if early_stop_reason_str is None:
+            return None
 
-        field_scores: dict[str, float] = {}
+        try:
+            early_stop_reason = EarlyStopReason(early_stop_reason_str)
+        except ValueError:
+            logger.warning(
+                f"Unknown early-stop reason {early_stop_reason_str!r}; "
+                "EarlyStopReason enum may be out of sync with early_stop.py"
+            )
+            early_stop_reason = None
+
+        return PairScoreResult(
+            probability=0.0,
+            doi_mismatch_adjustment_applied=False,
+            field_results={},
+            early_stop_reason=early_stop_reason,
+            label=PairLabel.NOT_DUPLICATE,
+        )
+
+    @staticmethod
+    def _resolve_score_fields(
+        weights: dict[str, float],
+        fields: list[str] | None,
+    ) -> list[tuple[str, float]]:
+        """Resolve score fields."""
+        if fields is None:
+            return [
+                (field_name, weight)
+                for field_name, weight in weights.items()
+                if field_name != "intercept"
+            ]
+        return [
+            (field_name, weights[field_name])
+            for field_name in fields
+            if field_name in weights and field_name != "intercept"
+        ]
+
+    def _score_pair_fields(
+        self,
+        record_a: Paper,
+        record_b: Paper,
+        fields_to_use: list[tuple[str, float]],
+        kwargs: dict[str, object],
+    ) -> tuple[dict[str, FieldResult], float]:
+        """Produce weighted field-level score."""
+        field_results: dict[str, FieldResult] = {}
         weighted_total = 0.0
 
-        # Determine which fields to use
-        if fields is not None:
-            fields_to_use = [(f, weights[f]) for f in fields if f in weights]
-        else:
-            fields_to_use = list(weights.items())
+        for field_name, weight in fields_to_use:
+            val_a = getattr(record_a, field_name, None)
+            val_b = getattr(record_b, field_name, None)
 
-        for field, weight in fields_to_use:
-            val_a = getattr(record_a, field, None)
-            val_b = getattr(record_b, field, None)
-
-            if val_a is None or val_b is None:
+            if val_a is None and val_b is None:
+                field_results[field_name] = FieldResult(status=FieldStatus.MISSING_BOTH)
                 continue
 
-            compare_method = getattr(self, f"compare_{field}", None)
+            if val_a is None:
+                field_results[field_name] = FieldResult(
+                    status=FieldStatus.MISSING_A,
+                    value_b=str(val_b),
+                )
+                continue
+
+            if val_b is None:
+                field_results[field_name] = FieldResult(
+                    status=FieldStatus.MISSING_B,
+                    value_a=str(val_a),
+                )
+                continue
+
+            compare_method = getattr(self, f"compare_{field_name}", None)
             if compare_method is None:
-                logger.warning(f"No compare method for field: {field}")
+                logger.warning(f"No compare method for field: {field_name}")
                 continue
 
             try:
-                match_score = compare_method(record_a, record_b, **kwargs)
+                comparison = compare_method(record_a, record_b, **kwargs)
             except (ValueError, TypeError, AttributeError) as e:
-                logger.error(f"Error comparing {field}: {e}")
+                logger.error(f"Error comparing {field_name}: {e}")
                 continue
 
-            field_scores[field] = match_score
-            weighted_total += match_score * weight
+            field_results[field_name] = FieldResult(
+                status=FieldStatus.COMPARED,
+                value_a=str(val_a),
+                value_b=str(val_b),
+                normalised_value_a=comparison.normalised_value_a,
+                normalised_value_b=comparison.normalised_value_b,
+                score=comparison.score,
+            )
+            weighted_total += comparison.score * weight
             logger.debug(
-                f"{field}: match_score={match_score:.4f}, weight={weight}, "
-                f"weighted={match_score * weight:.4f}"
+                f"{field_name}: match_score={comparison.score:.4f}, weight={weight}, "
+                f"weighted={comparison.score * weight:.4f}"
             )
 
-        raw_score = weighted_total + intercept
-        logger.debug(f"Raw score (before sigmoid): {raw_score:.4f}")
-        probability = 1 / (1 + exp(-raw_score))
-        logger.debug(f"Weighted dedup probability: {probability:.4f}")
+        return field_results, weighted_total
 
-        # Apply DOI mismatch penalty if both DOIs are present and do not match
+    @staticmethod
+    def _has_compared_fields(field_results: dict[str, FieldResult]) -> bool:
+        """Check if a given field has been compared."""
+        return any(fr.status == FieldStatus.COMPARED for fr in field_results.values())
+
+    @staticmethod
+    def _build_unscorable_result(
+        field_results: dict[str, FieldResult],
+    ) -> PairScoreResult:
+        """Return a PairScoreResult object which was unscorable."""
+        return PairScoreResult(
+            probability=0.0,
+            doi_mismatch_adjustment_applied=False,
+            field_results=field_results,
+            early_stop_reason=None,
+            label=PairLabel.UNSCORABLE,
+            unscorable_reason="no_comparable_fields",
+        )
+
+    @staticmethod
+    def _calculate_probability(weighted_total: float, intercept: float) -> float:
+        """Calculate weighted probability."""
+        raw_score = weighted_total + intercept
+        logger.debug(f"raw score (before sigmoid): {raw_score:.4f}")
+        probability = 1 / (1 + exp(-raw_score))
+        logger.debug(f"weighted dedupe probability: {probability:.4f}")
+        return probability
+
+    @staticmethod
+    def _apply_doi_mismatch_penalty(
+        record_a: Paper,
+        record_b: Paper,
+        probability: float,
+        doi_mismatch_penalty: float = DOI_MISMATCH_PENALTY,
+    ) -> tuple[float, bool]:
+        """Apply the doi mismatch penalty, given 2 records and probability."""
         doi_a = getattr(record_a, "doi", None)
         doi_b = getattr(record_b, "doi", None)
-        penalty_factor = 1.0
-        if doi_a is not None and doi_b is not None:
-            norm_a = normalise_doi(getattr(doi_a, "identifier", None))
-            norm_b = normalise_doi(getattr(doi_b, "identifier", None))
-            if norm_a and norm_b and norm_a != norm_b:
-                penalty_factor = 0.9
-                logger.debug(
-                    f"DOI mismatch penalty applied: {norm_a} != {norm_b}, factor={penalty_factor}"
-                )
+        if doi_a is None or doi_b is None:
+            return probability, False
 
-        return probability * penalty_factor, field_scores, None
+        norm_a = normalise_doi(getattr(doi_a, "identifier", None))
+        norm_b = normalise_doi(getattr(doi_b, "identifier", None))
+        if norm_a and norm_b and norm_a != norm_b:
+            logger.debug(
+                f"DOI mismatch penalty applied: {norm_a} != {norm_b}, factor={doi_mismatch_penalty}"
+            )
+            return probability * doi_mismatch_penalty, True
+
+        return probability, False
+
+    @staticmethod
+    def _comparison_output(
+        normalised_value_a: str,
+        normalised_value_b: str,
+        score: float,
+    ) -> ComparisonOutput:
+        """Build a structured result from normalized values and a score."""
+        return ComparisonOutput(
+            normalised_value_a=normalised_value_a,
+            normalised_value_b=normalised_value_b,
+            score=score,
+        )
 
     def compare_one_to_many(
         self,
@@ -290,7 +431,6 @@ class Deduper:
         Implements early stopping logic:
         - If DOI and PAGES both present and both don't match -> STOP (return 0.0)
         - Otherwise compute mean of all available match scores
-        - Excludes abstract and issue from the mean calculation
 
         Args:
             record_a (Paper): first paper to compare
@@ -346,9 +486,9 @@ class Deduper:
                 continue
 
             try:
-                score = compare_method(record_a, record_b, **kwargs)
-                scores[field] = score
-                logger.debug(f"Score for {field}: {score}")
+                comparison = compare_method(record_a, record_b, **kwargs)
+                scores[field] = comparison.score
+                logger.debug(f"Score for {field}: {comparison.score}")
             except (ValueError, TypeError, AttributeError) as e:
                 logger.error(f"Error comparing {field}: {e}")
                 continue
@@ -386,7 +526,6 @@ class Deduper:
         - year: 0.12
         - journal: 1.42
         - pages: 1.01
-        - abstract: -0.29 (negative weight)
         - volume: 0.38
         - issue: -0.22 (negative weight)
         - intercept: -8.80
@@ -411,6 +550,9 @@ class Deduper:
 
         weighted_scores = {}
         for field, weight in weights.items():
+            if field == "intercept":
+                continue
+
             # check if both records have field from weights
             val_a = getattr(record_a, field, None)
             val_b = getattr(record_b, field, None)
@@ -430,8 +572,8 @@ class Deduper:
                 continue
 
             try:
-                match_score = compare_method(record_a, record_b, **kwargs)
-                weighted_score = match_score * weight
+                comparison = compare_method(record_a, record_b, **kwargs)
+                weighted_score = comparison.score * weight
                 weighted_scores[field] = weighted_score
             except (ValueError, TypeError, AttributeError) as e:
                 logger.error(f"Error comparing {field}: {e}")
@@ -481,35 +623,12 @@ class Deduper:
         logger.info("No early stopping reason detected.")
         return None
 
-    def has_abstract_conflict(self, record_a: Paper, record_b: Paper) -> bool:
-        """Return True when abstracts are present and show conflicting content."""
-        abstract_a = getattr(record_a, "abstract", None)
-        abstract_b = getattr(record_b, "abstract", None)
-
-        if not abstract_a or not abstract_b:
-            return False
-
-        # In the select year-gap subgroup, abstract disagreement is treated as
-        # strong evidence against a duplicate.
-        abstract_sim = self.compare_abstract(record_a, record_b)
-        if abstract_sim < ABSTRACT_SIMILARITY_THRESHOLD:
-            return True
-
-        nums_a = extract_abstract_numbers(abstract_a)
-        nums_b = extract_abstract_numbers(abstract_b)
-
-        # If neither abstract has numbers, similarity check above decides.
-        if not nums_a and not nums_b:
-            return False
-
-        return nums_a != nums_b
-
     def compare_doi(
         self,
         record_a: Paper,
         record_b: Paper,
         **kwargs,
-    ) -> float:
+    ) -> ComparisonOutput:
         """
         Compare DOIs between two records (exact match after normalization).
 
@@ -517,18 +636,18 @@ class Deduper:
             float: 1.0 if DOIs match, 0.0 otherwise
 
         """
-        doi_a = normalise_doi(getattr(record_a.doi, "identifier", None))
-        doi_b = normalise_doi(getattr(record_b.doi, "identifier", None))
+        doi_a = normalise_doi(getattr(record_a.doi, "identifier", None)) or ""
+        doi_b = normalise_doi(getattr(record_b.doi, "identifier", None)) or ""
 
         if not doi_a or not doi_b:
-            return 0.0
-        if doi_a == doi_b:
-            return 1.0
-        # Fallback: strip punctuation from suffix to catch variants like
-        # missing dots (100B3.BJJ vs 100B3BJJ) or _ vs - substitution.
-        if strip_doi_punctuation(doi_a) == strip_doi_punctuation(doi_b):
-            return 1.0
-        return 0.0
+            score = 0.0
+        elif doi_a == doi_b or strip_doi_punctuation(doi_a) == strip_doi_punctuation(
+            doi_b
+        ):
+            score = 1.0
+        else:
+            score = 0.0
+        return self._comparison_output(doi_a, doi_b, score)
 
     def compare_openalex_id(
         self,
@@ -536,7 +655,7 @@ class Deduper:
         record_b: Paper,
         method: Literal["string_match", "http", "both"] = "string_match",
         **kwargs,
-    ) -> float:
+    ) -> ComparisonOutput:
         """
         Compare two openalex ids.
 
@@ -553,30 +672,35 @@ class Deduper:
             float: between 0 and 1.
 
         """
-        if record_a.openalex_id is None or record_b.openalex_id is None:
-            return 0.0
-
         openalex_id_a_str = (
-            record_a.openalex_id.identifier
-        )  # should have openalex url removed
-        openalex_id_b_str = record_b.openalex_id.identifier
+            str(record_a.openalex_id.identifier) if record_a.openalex_id else ""
+        )
+        openalex_id_b_str = (
+            str(record_b.openalex_id.identifier) if record_b.openalex_id else ""
+        )
 
         if method == "string_match":
             # NOTE - does this even make sense? i think this is what @kaitlynhair code is doing
             # but does approximate string similarity imply similarity of the
             # underlying record, or should we just do a == b comparison?
-            return Deduper.calculate_string_distance(
-                openalex_id_a_str, openalex_id_b_str, **kwargs
+            score = (
+                Deduper.calculate_string_distance(
+                    openalex_id_a_str, openalex_id_b_str, **kwargs
+                )
+                if openalex_id_a_str and openalex_id_b_str
+                else 0.0
             )
+            return self._comparison_output(openalex_id_a_str, openalex_id_b_str, score)
 
-        not_implemented_err_msg = f"method {method} is not yet implemented."
-        raise NotImplementedError(not_implemented_err_msg)
+        not_implemented_error = f"method {method} is not yet implemented."
+        raise NotImplementedError(not_implemented_error)
 
     def compare_pubmed_id(
         self,
         record_a: Paper,
         record_b: Paper,
-    ) -> float:
+        **kwargs,
+    ) -> ComparisonOutput:
         """
         Compare two pubmed ids.
 
@@ -589,15 +713,27 @@ class Deduper:
             float: _description_
 
         """
-        if record_a.pubmed_id is None or record_b.pubmed_id is None:
-            return 0.0
+        pubmed_id_a_str = (
+            str(record_a.pubmed_id.identifier) if record_a.pubmed_id else ""
+        )
+        pubmed_id_b_str = (
+            str(record_b.pubmed_id.identifier) if record_b.pubmed_id else ""
+        )
+        return self._comparison_output(
+            pubmed_id_a_str,
+            pubmed_id_b_str,
+            float(
+                bool(
+                    pubmed_id_a_str
+                    and pubmed_id_b_str
+                    and pubmed_id_a_str == pubmed_id_b_str
+                )
+            ),
+        )
 
-        pubmed_id_a_str = record_a.pubmed_id.identifier
-        pubmed_id_b_str = record_b.pubmed_id.identifier
-
-        return float(pubmed_id_a_str == pubmed_id_b_str)
-
-    def compare_isbn(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_isbn(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 ISBNs after normalization.
 
@@ -605,14 +741,17 @@ class Deduper:
             float: 1.0 if equal, 0.0 otherwise.
 
         """
-        isbn_a = normalise_isbn(record_a.isbn)
-        isbn_b = normalise_isbn(record_b.isbn)
+        isbn_a = normalise_isbn(str(record_a.isbn)) if record_a.isbn else ""
+        isbn_b = normalise_isbn(str(record_b.isbn)) if record_b.isbn else ""
+        return self._comparison_output(
+            isbn_a or "",
+            isbn_b or "",
+            float(bool(isbn_a and isbn_b and isbn_a == isbn_b)),
+        )
 
-        if not isbn_a or not isbn_b:
-            return 0.0
-        return 1.0 if isbn_a == isbn_b else 0.0
-
-    def compare_authors(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_authors(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare two lists of authors.
 
@@ -627,7 +766,7 @@ class Deduper:
         """
         if not record_a.authors or not record_b.authors:
             logger.warning("One or both records have no authors.")
-            return 0.0
+            return self._comparison_output("", "", 0.0)
 
         try:
             authors_a = ", ".join(
@@ -652,22 +791,28 @@ class Deduper:
             )
         except AttributeError as e:
             logger.error(f"Error extracting authors: {e}")
-            return 0.0
+            return self._comparison_output("", "", 0.0)
 
         # Return 0 if either authors list is empty
         if not authors_a or not authors_b:
             logger.warning("One or both authors lists are empty after extraction.")
-            return 0.0
+            return self._comparison_output(authors_a, authors_b, 0.0)
 
         # Allow override algorithm via kwargs, fallback to Jaro-Winkler
         algo = kwargs.get(
             "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
         )
-        return Deduper.calculate_string_distance(
-            authors_a, authors_b, string_distance_algorithm=algo
+        return self._comparison_output(
+            authors_a,
+            authors_b,
+            Deduper.calculate_string_distance(
+                authors_a, authors_b, string_distance_algorithm=algo
+            ),
         )
 
-    def compare_title(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_title(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare two titles using Levenshtein distance (case-insensitive),
         with special handling for alternative-language or subtitle segments.
@@ -677,7 +822,11 @@ class Deduper:
         """
         # Return 0 if either title is missing
         if not record_a.title or not record_b.title:
-            return 0.0
+            return self._comparison_output(
+                (record_a.title or "").strip().lower(),
+                (record_b.title or "").strip().lower(),
+                0.0,
+            )
 
         a_full = record_a.title.strip().lower()
         b_full = record_b.title.strip().lower()
@@ -706,15 +855,19 @@ class Deduper:
                 b_first,
                 string_distance_algorithm=StringDistanceAlgorithm.LEVENSHTEIN,
             )
-            return max(full_sim, seg_sim)
+            full_sim = max(full_sim, seg_sim)
 
-        return full_sim
+        return self._comparison_output(a_full, b_full, full_sim)
 
-    def compare_titles(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_titles(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """Backward-compatible alias for compare_title."""
         return self.compare_title(record_a, record_b, **kwargs)
 
-    def compare_year(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_year(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 years.
 
@@ -731,28 +884,43 @@ class Deduper:
 
         """
         if record_a.year is None or record_b.year is None:
-            return 0.0
+            return self._comparison_output(
+                "" if record_a.year is None else str(record_a.year),
+                "" if record_b.year is None else str(record_b.year),
+                0.0,
+            )
 
         year_a = record_a.year
         year_b = record_b.year
-        return float(year_a == year_b)
+        return self._comparison_output(
+            str(year_a), str(year_b), float(year_a == year_b)
+        )
 
-    def compare_journal(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_journal(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare two journal names using Jaro-Winkler distance.
         Returns a float between 0 and 1.
         """
         # Return 0 if either journal is missing
         if not record_a.journal or not record_b.journal:
-            return 0.0
+            return self._comparison_output(
+                (record_a.journal or "").strip(),
+                (record_b.journal or "").strip(),
+                0.0,
+            )
 
         # Allow override algorithm via kwargs, fallback to Jaro-Winkler
         algo = kwargs.get(
             "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
         )
 
+        journal_a = record_a.journal.strip()
+        journal_b = record_b.journal.strip()
+
         score = Deduper.calculate_string_distance(
-            record_a.journal, record_b.journal, string_distance_algorithm=algo
+            journal_a, journal_b, string_distance_algorithm=algo
         )
 
         # If the raw similarity is low, check whether one name is an abbreviation
@@ -760,13 +928,15 @@ class Deduper:
         # When an abbreviation match is detected, return a fixed score of 0.85 so
         # downstream veto rules don't incorrectly flag these as mismatches.
         if score < JOURNAL_ABBREVIATION_THRESHOLD and is_journal_abbreviation_match(
-            record_a.journal, record_b.journal
+            journal_a, journal_b
         ):
-            return 0.85
+            score = 0.85
 
-        return score
+        return self._comparison_output(journal_a, journal_b, score)
 
-    def compare_publisher(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_publisher(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare two publisher names using string distance.
 
@@ -779,14 +949,24 @@ class Deduper:
 
         """
         if record_a.publisher is None or record_b.publisher is None:
-            return 0.0
+            return self._comparison_output(
+                (record_a.publisher or "").strip().lower(),
+                (record_b.publisher or "").strip().lower(),
+                0.0,
+            )
 
         publisher_a = record_a.publisher.lower().strip()
         publisher_b = record_b.publisher.lower().strip()
 
-        return Deduper.calculate_string_distance(publisher_a, publisher_b, **kwargs)
+        return self._comparison_output(
+            publisher_a,
+            publisher_b,
+            Deduper.calculate_string_distance(publisher_a, publisher_b, **kwargs),
+        )
 
-    def compare_pages(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_pages(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 sets of page delineations.
         Returns 1.0 if canonicalized page values match, 0.0 otherwise.
@@ -800,90 +980,69 @@ class Deduper:
 
         """
         if record_a.pages is None or record_b.pages is None:
-            return 0.0
+            return self._comparison_output(
+                normalise_pages(record_a.pages) or "",
+                normalise_pages(record_b.pages) or "",
+                0.0,
+            )
 
         pages_a = normalise_pages(record_a.pages)
         pages_b = normalise_pages(record_b.pages)
-        return float(pages_a == pages_b)
-
-    def compare_abstract(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
-        """
-        Compare abstracts between two papers using Levenshtein distance,
-        after removing boilerplate words/phrases (e.g., 'methods', 'results', 'ABSTRACT:').
-
-        Returns:
-            float: similarity score between 0 and 1
-
-        """
-        if not record_a.abstract or not record_b.abstract:
-            return 0.0
-
-        def preprocess_abstract(text: str) -> str:
-            # Remove common boilerplate words/section headers
-            boilerplate = [
-                r"\babstract:?\b",
-                r"\bbackground:?\b",
-                r"\bmethods?:?\b",
-                r"\bresults?:?\b",
-                r"\bconclusions?:?\b",
-                r"\bobjective[s]?:?\b",
-                r"\bintroduction:?\b",
-                r"\bpurpose:?\b",
-                r"\bdesign:?\b",
-                r"\bsetting:?\b",
-                r"\bparticipants?:?\b",
-                r"\bmain outcome[s]?:?\b",
-                r"\bdiscussion:?\b",
-                r"\bimplications?:?\b",
-                r"\bconclusion:?\b",
-            ]
-            text = text.lower()
-            for pat in boilerplate:
-                text = re.sub(pat, " ", text)
-            # Remove extra whitespace
-            return re.sub(r"\s+", " ", text).strip()
-
-        abs_a = preprocess_abstract(record_a.abstract)
-        abs_b = preprocess_abstract(record_b.abstract)
-
-        algo = kwargs.get(
-            "string_distance_algorithm", StringDistanceAlgorithm.LEVENSHTEIN
-        )
-        return Deduper.calculate_string_distance(
-            abs_a, abs_b, string_distance_algorithm=algo
+        return self._comparison_output(
+            pages_a or "",
+            pages_b or "",
+            float(bool(pages_a and pages_b and pages_a == pages_b)),
         )
 
-    def compare_volume(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_volume(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 sets of volumes,
         using Jaro-Winkler distance.
         """
         if not record_a.volume or not record_b.volume:
-            return 0.0
+            return self._comparison_output(
+                record_a.volume or "", record_b.volume or "", 0.0
+            )
 
         algo = kwargs.get(
             "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
         )
-        return Deduper.calculate_string_distance(
-            record_a.volume, record_b.volume, string_distance_algorithm=algo
+        return self._comparison_output(
+            record_a.volume,
+            record_b.volume,
+            Deduper.calculate_string_distance(
+                record_a.volume, record_b.volume, string_distance_algorithm=algo
+            ),
         )
 
-    def compare_issue(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_issue(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 sets of issues,
         using Jaro-Winkler distance.
         """
         if not record_a.issue or not record_b.issue:
-            return 0.0
+            return self._comparison_output(
+                record_a.issue or "", record_b.issue or "", 0.0
+            )
 
         algo = kwargs.get(
             "string_distance_algorithm", StringDistanceAlgorithm.JARO_WINKLER
         )
-        return Deduper.calculate_string_distance(
-            record_a.issue, record_b.issue, string_distance_algorithm=algo
+        return self._comparison_output(
+            record_a.issue,
+            record_b.issue,
+            Deduper.calculate_string_distance(
+                record_a.issue, record_b.issue, string_distance_algorithm=algo
+            ),
         )
 
-    def compare_issn(self, record_a: Paper, record_b: Paper, **kwargs) -> float:
+    def compare_issn(
+        self, record_a: Paper, record_b: Paper, **kwargs
+    ) -> ComparisonOutput:
         """
         Compare 2 ISSN strings.
         Returns 1.0 if exact match, 0.0 otherwise.
@@ -897,9 +1056,15 @@ class Deduper:
 
         """
         if record_a.issn is None or record_b.issn is None:
-            return 0.0
+            return self._comparison_output(
+                record_a.issn or "", record_b.issn or "", 0.0
+            )
 
-        return float(record_a.issn == record_b.issn)
+        return self._comparison_output(
+            record_a.issn,
+            record_b.issn,
+            float(record_a.issn == record_b.issn),
+        )
 
     @staticmethod
     def calculate_string_distance(

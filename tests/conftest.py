@@ -1,4 +1,6 @@
+import csv
 import json
+from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
@@ -26,8 +28,13 @@ from destiny_sdk.identifiers import (
 from destiny_sdk.references import Reference, ReferenceFileInput
 from destiny_sdk.visibility import Visibility
 from faker import Faker
+from loguru import logger
 from pydantic import HttpUrl
 
+from destiny_dedupe.algorithm.import_references import (
+    CsvLoadConfig,
+    load_reference_csv,
+)
 from destiny_dedupe.data_models import Paper
 
 fa = Faker()
@@ -41,7 +48,7 @@ def generate_fake_annotations() -> list[Annotation]:
         Annotation: an annotation.
 
     """
-    return [
+    annotations = [
         BooleanAnnotation(
             scheme="ring",
             value=fa.boolean(),
@@ -51,6 +58,8 @@ def generate_fake_annotations() -> list[Annotation]:
         )
         for word in ["earth", "fire", "wind", "water", "heart"]
     ]
+    logger.debug("Generated {} fake annotations for fixture data", len(annotations))
+    return annotations
 
 
 def generate_fake_location_enhancement(
@@ -66,6 +75,9 @@ def generate_fake_location_enhancement(
         Annotation: an annotation
 
     """
+    logger.debug(
+        "Generating fake location enhancement for reference type: {}", reference_type
+    )
     EnhancementDataModel = Enhancement  # noqa: N806
     if reference_type == "file":
         EnhancementDataModel = EnhancementFileInput  # noqa: N806
@@ -123,6 +135,11 @@ def generate_fake_enhancements(
         list[Enhancement]: a list of enhacements.
 
     """
+    logger.debug(
+        "Generating fake enhancements for reference_type={} bib_content={}",
+        reference_type,
+        bib_content,
+    )
     EnhancementDataModel = Enhancement  # noqa: N806
     if reference_type == "file":
         EnhancementDataModel = EnhancementFileInput  # noqa: N806
@@ -318,6 +335,11 @@ def generate_reference_jsonl_string(*, valid: bool = True) -> str:
     if not valid:
         data.pop("identifiers", None)
 
+    logger.debug(
+        "Built reference JSONL fixture with valid={} and identifiers={}",
+        valid,
+        bool(data.get("identifiers")),
+    )
     return json.dumps(data)
 
 
@@ -394,3 +416,46 @@ def valid_paper_instance():
         publisher="Createspace Independent Publishing Platform",
         year=2011,
     )
+
+
+FIXTURE_DIR = Path(__file__).parent / "fixtures"
+
+
+def _load_fixture_pairs() -> list[dict]:
+    with (FIXTURE_DIR / "pairs.csv").open(newline="") as fh:
+        return list(csv.DictReader(fh))
+
+
+def pytest_generate_tests(metafunc):
+    """Parametrise fixture-driven tests, one case per pair in pairs.csv."""
+    if "fixture_pair" in metafunc.fixturenames:
+        pairs = _load_fixture_pairs()
+        metafunc.parametrize("fixture_pair", pairs, ids=[p["pair_id"] for p in pairs])
+    if "csv_fixture_pair" in metafunc.fixturenames:
+        pairs = [p for p in _load_fixture_pairs() if "csv" in p["paths"]]
+        metafunc.parametrize(
+            "csv_fixture_pair", pairs, ids=[p["pair_id"] for p in pairs]
+        )
+
+
+@pytest.fixture(scope="session")
+def fixture_pairs() -> list[dict]:
+    """Every fixture pair, as rows from pairs.csv."""
+    return _load_fixture_pairs()
+
+
+@pytest.fixture(scope="session")
+def fixture_papers() -> dict[int, Paper]:
+    """Every fixture record, built directly from the stored Paper fields."""
+    stored = json.loads((FIXTURE_DIR / "papers.json").read_text())
+    return {int(record_id): Paper(**fields) for record_id, fields in stored.items()}
+
+
+@pytest.fixture(scope="session")
+def csv_fixture_papers() -> dict[int, Paper]:
+    """Load the same records through the CSV import path."""
+    papers = load_reference_csv(
+        FIXTURE_DIR / "records.csv",
+        CsvLoadConfig(include_record_id=True),
+    )
+    return {paper.recordid: paper for paper in papers}

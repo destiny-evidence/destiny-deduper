@@ -103,7 +103,6 @@ deduplicated_df, removed_df, decisions_df = remove_duplicates(
     df_records=df,
     scored_pairs=scored_df,
     threshold=THRESHOLD,
-    strategy="prefer_doi_abstract",  # recommended: prioritize DOI/abstract, then metadata richness
     probability_column="prob",
     id_a_column="id_a",
     id_b_column="id_b",
@@ -117,7 +116,6 @@ print("Removed records:", len(removed_df))
 
 Retention strategy options for `remove_duplicates`:
 
-- `prefer_doi_abstract` (recommended)
 - `metadata_richness`
 - `min_recordid`
 

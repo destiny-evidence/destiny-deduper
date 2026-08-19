@@ -71,7 +71,7 @@ def check_doi_pages_mismatch(ctx: ComparisonContext) -> bool:
         norm_doi_a = normalise_doi(getattr(ctx.record_a.doi, "identifier", None))
         norm_doi_b = normalise_doi(getattr(ctx.record_b.doi, "identifier", None))
         doi_match = norm_doi_a == norm_doi_b if (norm_doi_a and norm_doi_b) else True
-        pages_match = ctx.deduper.compare_pages(ctx.record_a, ctx.record_b) == 1.0
+        pages_match = ctx.deduper.compare_pages(ctx.record_a, ctx.record_b).score == 1.0
 
         if not doi_match and not pages_match:
             logger.debug("Early stop: DOI and PAGES both don't match")
@@ -178,13 +178,13 @@ def check_title_match_with_structural_conflict(ctx: ComparisonContext) -> bool:
             journal_mismatch = (
                 ctx.record_a.journal is not None
                 and ctx.record_b.journal is not None
-                and ctx.deduper.compare_journal(ctx.record_a, ctx.record_b)
+                and ctx.deduper.compare_journal(ctx.record_a, ctx.record_b).score
                 < JOURNAL_MISMATCH_THRESHOLD
             )
             pages_mismatch = (
                 ctx.record_a.pages is not None
                 and ctx.record_b.pages is not None
-                and ctx.deduper.compare_pages(ctx.record_a, ctx.record_b)
+                and ctx.deduper.compare_pages(ctx.record_a, ctx.record_b).score
                 < PAPER_MISMATCH_THRESHOLD
             )
             if journal_mismatch and pages_mismatch:
@@ -207,7 +207,7 @@ def check_title_and_metadata_mismatch(ctx: ComparisonContext) -> bool:
          (below TITLE_SIM_THRESHOLD_LOWER), it counts as an additional
          mismatch, making the veto easier to trigger.
     """
-    title_sim = ctx.deduper.compare_title(ctx.record_a, ctx.record_b)
+    title_sim = ctx.deduper.compare_title(ctx.record_a, ctx.record_b).score
 
     # Extremely different titles -> definitely not duplicates.
     if title_sim < TITLE_VETO_THRESHOLD:
@@ -272,37 +272,6 @@ def check_title_and_metadata_mismatch(ctx: ComparisonContext) -> bool:
     return False
 
 
-def check_year_gap_abstract_numeric_mismatch(
-    ctx: ComparisonContext,
-) -> bool:
-    """
-    Year-gap + abstract-numeric conflict:
-    if core metadata still looks very similar but publication years diverge,
-    use abstract numbers as a disambiguation veto.
-
-    """
-    ctx.record_a = ctx.record_a
-    ctx.record_b = ctx.record_b
-
-    if ctx.record_a.year is None or ctx.record_b.year is None:
-        return False
-
-    if abs(int(ctx.record_a.year) - int(ctx.record_b.year)) <= 1:
-        return False
-
-    title_sim = ctx.deduper.compare_title(ctx.record_a, ctx.record_b)
-    authors_sim = ctx.deduper.compare_authors(ctx.record_a, ctx.record_b)
-    journal_sim = ctx.deduper.compare_journal(ctx.record_a, ctx.record_b)
-
-    strong_metadata_match = title_sim >= STRONG_METADATA_MATCH_THRESHOLD and (
-        authors_sim >= AUTHORS_SIM_THRESHOLD or journal_sim >= JOURNAL_SIM_THRESHOLD
-    )
-
-    return strong_metadata_match and ctx.deduper.has_abstract_conflict(
-        ctx.record_a, ctx.record_b
-    )
-
-
 EARLY_STOP_RULES = [
     EarlyStopRule(reason="doi_and_pages_mismatch", check=check_doi_pages_mismatch),
     EarlyStopRule(
@@ -319,9 +288,5 @@ EARLY_STOP_RULES = [
     ),
     EarlyStopRule(
         reason="title_with_metadata_mismatch", check=check_title_and_metadata_mismatch
-    ),
-    EarlyStopRule(
-        reason="year_gap_with_abstract_conflict",
-        check=check_year_gap_abstract_numeric_mismatch,
     ),
 ]

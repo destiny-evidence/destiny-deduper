@@ -27,7 +27,7 @@ authors = [
     {email = "n.loynes@ucl.ac.uk", name = "Nik Loynes"},
 ]
 dependencies = [
-    "destiny-sdk>=0.9.0,<0.10.0",
+    "destiny-sdk>=0.9.0",
     "jellyfish>=1.2.0",
     "loguru>=0.7.3",
     "pydantic-extra-types>=2.10.5",
@@ -40,7 +40,7 @@ description = "A suite of tools for deduplicating DESTINY Works"
 name = "deduplication-toolkit"
 readme = "README.md"
 requires-python = ">=3.12.11"
-version = "0.2.0"
+version = "0.2.1"
 
 [tool.pytest.ini_options]
 addopts = ["--color=yes", "--import-mode=importlib", "--verbose"]
@@ -56,6 +56,7 @@ lint.ignore = [
     "ANN003", # kwargs type annotation required
     "ARG002", # kwargs unused
     "COM812", # trailing commas (ruff-format recommended)
+    "CPY001", # copyright notice... bit OTT atm, copyright is in repo
     "D104", # module docstring
     "D203", # no-blank-line-before-class
     "D205", # missing-blank-line-after-summary

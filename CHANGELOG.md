@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.2.1 (2026-08-19)
+
+### Continuous Integration
+
+- Exclude the generated CHANGELOG from markdownlint-fix
+  ([`bcc8a39`](https://github.com/destiny-evidence/deduplication-toolkit/commit/bcc8a39e42fe48810a949dc45d363e608b09b042))
+
+
 ## v0.2.0 (2026-08-13)
 
 ### Chores
