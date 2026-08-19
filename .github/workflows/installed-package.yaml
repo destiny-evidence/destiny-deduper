@@ -52,11 +52,9 @@ jobs:
           EOF
 
       - name: Import each distribution from outside the source tree
-        # Run from /tmp so the checkout is not on sys.path, which would import
-        # the source rather than the installed distribution.
         working-directory: /tmp
         run: |
-          for artefact in "$GITHUB_WORKSPACE"/dist/*; do
+          for artifact in "$GITHUB_WORKSPACE"/dist/*; do
             name=$(basename "$artifact")
             echo "::group::$name"
             uv venv "/tmp/venv-$name" --python 3.12
