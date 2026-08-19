@@ -32,7 +32,7 @@ if not USER_CONFIG_FILE_PATH.is_file():
         from shutil import copyfile
 
         logger.debug(
-            "copying system .config.yaml to user config yaml (~/.config/destiny_dedupe/.config.yaml) for editability."
+            f"copying package .config.yaml to user config yaml ({USER_CONFIG_FILE_PATH}) for editability."
         )
         try:
             USER_CONFIG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
