@@ -2,6 +2,28 @@
 
 <!-- version list -->
 
+## v0.2.2 (2026-08-19)
+
+### Bug Fixes
+
+- Added error handling for read-only user dir in certain scenarios, falling back to package
+  config.yaml
+  ([`ab74e58`](https://github.com/destiny-evidence/deduplication-toolkit/commit/ab74e58926ae849556458459b2260852e84a7308))
+
+### Chores
+
+- Removing version constraint on destiny-sdk
+  ([`afe53d2`](https://github.com/destiny-evidence/deduplication-toolkit/commit/afe53d29fb38a01ef5a554af9e6e543c2f8b46a7))
+
+- Updating logging msg
+  ([`8e3f3e8`](https://github.com/destiny-evidence/deduplication-toolkit/commit/8e3f3e88f1fe8e10ba4594780b44060ab6ad64f2))
+
+### Continuous Integration
+
+- Fixing remaining AE spelling in install workflow
+  ([`3f6ad27`](https://github.com/destiny-evidence/deduplication-toolkit/commit/3f6ad278c68beabf2d4cb7f751ee71862a4db79c))
+
+
 ## v0.2.1 (2026-08-19)
 
 ### Continuous Integration
