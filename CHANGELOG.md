@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.2.4 (2026-08-19)
+
+### Bug Fixes
+
+- Adding gh actions for pypi and testpypi publish
+  ([`07c5051`](https://github.com/destiny-evidence/destiny-deduper/commit/07c505107f14fc2ac85a9f718723046222a488db))
+
+### Continuous Integration
+
+- Skip duplicate uploads so a failed publish can be retried
+  ([`0cd64e2`](https://github.com/destiny-evidence/destiny-deduper/commit/0cd64e2b91b2263bdf133a57b0b71980e595d95a))
+
+
 ## v0.2.3 (2026-08-19)
 
 ### Bug Fixes
