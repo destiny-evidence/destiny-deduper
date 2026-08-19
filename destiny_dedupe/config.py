@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from loguru import logger
 from pydantic import BaseModel, Field
 from pydantic_settings import (
     BaseSettings,
@@ -11,10 +12,28 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
-# Resolved inside the package so the file is found from an installed copy, not
-# only from a source checkout.
 PACKAGE_ROOT = Path(__file__).resolve().parent
-CONFIG_FILE_PATH = PACKAGE_ROOT / "config.yaml"
+CONFIG_FILE_PATH = PACKAGE_ROOT / ".config.yaml"  # moved to inside package
+USER_CONFIG_FILE_PATH = (
+    Path("~/.config/destiny-dedupe/").expanduser() / ".config.yaml"
+)  # canonical version, but
+# won't work on windows just yet.
+
+if not USER_CONFIG_FILE_PATH.is_file():
+    from sys import platform
+
+    if platform == "win32":
+        logger.warning(
+            "user config not yet implemented, defaulting to packaged config."
+        )
+    else:
+        from shutil import copyfile
+
+        logger.debug(
+            "copying system .config.yaml to user config yaml (~/.config/destiny_dedupe/.config.yaml) for editability."
+        )
+        USER_CONFIG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        copyfile(CONFIG_FILE_PATH, USER_CONFIG_FILE_PATH)
 
 
 class TitleThresholds(BaseModel):
@@ -155,7 +174,9 @@ class Settings(BaseSettings):
     csv_import: CsvImportSettings = Field(default_factory=CsvImportSettings)
 
     model_config = SettingsConfigDict(
-        yaml_file=CONFIG_FILE_PATH,
+        yaml_file=USER_CONFIG_FILE_PATH
+        if USER_CONFIG_FILE_PATH.is_file()
+        else CONFIG_FILE_PATH,
         extra="ignore",
     )
 

@@ -73,6 +73,7 @@ lint.ignore = [
 lint.per-file-ignores = {"tests*" = [
     "ANN001", # No return type annotation
     "ANN201", # No return type annotation
+    "ANN202", # no return type ann for private funcs
     "ARG001", # Unused function argument
     "D100", # Missing docstring in public module
     "D103", # Missing docstring in public function
@@ -103,7 +104,7 @@ prerelease = false
 package-dir = {"" = "."}
 
 [tool.setuptools.package-data]
-destiny_dedupe = ["config.yaml"]
+destiny_dedupe = [".config.yaml"]
 
 [tool.setuptools.packages.find]
 exclude = ["misc*", "notebooks*", "tests*"]
