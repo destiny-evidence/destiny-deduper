@@ -127,4 +127,24 @@ All commits must use [**conventional commits**](conventionalcommits.org). The pr
 | `feat!:` or `BREAKING CHANGE:` footer | `feat!: remove legacy api` | major: `0.1.0 -> 1.0.0` |
 | `chore:`, `docs:`, `ci:`, `test:` | `chore: update deps` | no bump |
 
-we will udpate some stuff here!
+## Release flow
+
+```mermaid
+sequenceDiagram
+    participant Dev
+    participant Main as main branch
+    participant Release as Release workflow
+    participant Publish as Publish workflow
+    participant Test as TestPyPI
+    participant PyPI as PyPI
+
+    Dev->>Main: push conventional commit (feat:/fix:)
+    Main->>Release: triggers (push to main)
+    Release->>Release: semantic-release version<br/>bumps pyproject.toml, commits, tags, pushes
+    Release->>Publish: triggers via workflow_run (on completion)
+    Publish->>Publish: build job checks HEAD is tagged, uv build
+    Publish->>Test: uv publish --index testpypi (OIDC)
+    Test-->>Publish: success
+    Publish->>PyPI: uv publish (OIDC)
+    PyPI-->>Publish: success
+```
