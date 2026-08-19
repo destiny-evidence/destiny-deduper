@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v0.2.3 (2026-08-19)
+
+### Bug Fixes
+
+- Updating names from `deduplication-toolkit` to `destiny-deduper` for public release
+  ([`59303da`](https://github.com/destiny-evidence/destiny-deduper/commit/59303da5ee761adf7ce306d8d59d6cf5a7bc25f4))
+
+### Chores
+
+- Changing some more stuff to `destiny-deduper`
+  ([`d29e42c`](https://github.com/destiny-evidence/destiny-deduper/commit/d29e42c5ba242addf501c33e60e3881af47e3a49))
+
+### Documentation
+
+- Adding a bit more in readme
+  ([`a037658`](https://github.com/destiny-evidence/destiny-deduper/commit/a03765858b729acfdbbe133a65c5e08e3045d59e))
+
+- Placeholder change to get PR going
+  ([`1342452`](https://github.com/destiny-evidence/destiny-deduper/commit/1342452e747213b3e0a3248c2c8398a81345d5dd))
+
+
 ## v0.2.2 (2026-08-19)
 
 ### Bug Fixes
