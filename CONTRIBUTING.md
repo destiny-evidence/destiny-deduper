@@ -1,6 +1,6 @@
 # How to contribute to `destiny-deduper`
 
-Last updated: NL, 2026-08-13
+Last updated: NL, 2026-08-19
 
 ## Generally applicable guidelines
 
