@@ -33,13 +33,14 @@ dependencies = [
     "pydantic-extra-types>=2.10.5",
     "pydantic-settings>=2.10.1",
     "pydantic>=2.11.7",
+    "python-semantic-release>=10.6.1",
     "rapidfuzz>=3.14.5",
 ]
 description = "A suite of tools for deduplicating DESTINY Works"
 name = "deduplication-toolkit"
 readme = "README.md"
 requires-python = ">=3.12.11"
-version = "0.1.0"
+version = "0.2.0"
 
 [tool.pytest.ini_options]
 addopts = ["--color=yes", "--import-mode=importlib", "--verbose"]
@@ -84,6 +85,20 @@ lint.per-file-ignores = {"tests*" = [
 lint.select = ["ALL"]
 lint.mccabe.max-complexity = 18
 lint.pep8-naming.classmethod-decorators = ["classmethod"]
+
+[tool.semantic_release]
+allow_zero_version = true
+build_command = """
+    uv lock --upgrade-package "$PACKAGE_NAME"
+    git add uv.lock
+    uv build
+"""
+tag_format = "{version}"
+version_toml = ["pyproject.toml:project.version"]
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
 
 [tool.setuptools]
 package-dir = {"" = "."}
