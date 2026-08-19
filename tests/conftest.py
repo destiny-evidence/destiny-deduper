@@ -31,11 +31,11 @@ from faker import Faker
 from loguru import logger
 from pydantic import HttpUrl
 
-from destiny_dedupe.algorithm.import_references import (
+from destiny_deduper.algorithm.import_references import (
     CsvLoadConfig,
     load_reference_csv,
 )
-from destiny_dedupe.data_models import Paper
+from destiny_deduper.data_models import Paper
 
 fa = Faker()
 

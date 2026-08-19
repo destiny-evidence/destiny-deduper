@@ -5,8 +5,8 @@ Covers only the pairs marked ``csv`` in tests/fixtures/pairs.csv. The rest need
 fields the default CSV columns cannot carry, so they are Paper-only.
 """
 
-from destiny_dedupe.dedupe import Deduper
-from destiny_dedupe.normalisers import normalise_doi
+from destiny_deduper.dedupe import Deduper
+from destiny_deduper.normalisers import normalise_doi
 
 # The fields the scorer weights. A CSV round-trip that loses any of them changes
 # the score, which is the failure this comparison is here to catch.

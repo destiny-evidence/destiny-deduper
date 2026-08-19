@@ -3,9 +3,9 @@
 import pytest
 from destiny_sdk.identifiers import DOIIdentifier
 
-from destiny_dedupe.data_models import Paper
-from destiny_dedupe.dedupe import Deduper
-from destiny_dedupe.pair_score_result import (
+from destiny_deduper.data_models import Paper
+from destiny_deduper.dedupe import Deduper
+from destiny_deduper.pair_score_result import (
     EarlyStopReason,
     FieldStatus,
     PairLabel,
@@ -226,7 +226,7 @@ def test_get_library_info_returns_library_info():
 
 
 def test_get_library_info_threshold_matches_config():
-    from destiny_dedupe.config import get_settings
+    from destiny_deduper.config import get_settings
 
     info = get_library_info()
     assert info.decision_threshold == get_settings().decision_threshold

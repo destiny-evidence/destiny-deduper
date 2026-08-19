@@ -1,10 +1,10 @@
-# deduplication-toolkit
+# destiny-deduper
 
-A suite of tools for deduplicating DESTINY `References`
+A suite of tools for deduplicating citatations for publications.
 
 ## tl, dr
 
-Often, we want to ensure that a DESTINY `Reference` (or its sub-types) is not a duplicate of one that already exists in the DESTINY repository, or, more in some other bag of potential, pre-selected duplicate candidates. Hence the goal of this `deduplication-toolkit` is to provide a set of portable, customisable solutions for quantifying the likelihood that a given `Reference` is a duplicate of another.
+In large repositories of published works, we want to ensure that a given citation is not a duplicate of another. Hence the goal of this `destiny-deduper` is to provide a set of portable, customisable solutions for quantifying the likelihood that a given citation is a duplicate of another.
 
 ## Setup
 
@@ -30,6 +30,78 @@ uv sync
 source .venv/bin/activate
 ```
 
+## Using `destiny-deduper`
+
+`destiny-deduper` was built with the priority of using it to run as a constant background job on citations stored in `destiny-repository` which may be duplicates of one another. Hence, this library may feature certain design decisions which mean it doesn't necessarily lend itself to your (local, or otherwise) use case. However, you can do a lot with what's here!
+
+### Using destiny `Reference`s
+
+```python
+from destiny_sdk.identifiers import DOIIdentifier, ExternalIdentifierType
+from destiny_sdk.references import Reference
+
+from destiny_deduper.data_models import convert_ref_to_paper
+from destiny_deduper.dedupe import Deduper
+
+ref_a = Reference(
+    id="ref-1",
+    identifiers=[
+        DOIIdentifier(
+            identifier="10.1000/xyz123",
+            identifier_type=ExternalIdentifierType.DOI,
+        )
+    ],
+    enhancements=[],
+)
+
+ref_b = Reference(
+    id="ref-2",
+    identifiers=[
+        DOIIdentifier(
+            identifier="10.1000/xyz123",
+            identifier_type=ExternalIdentifierType.DOI,
+        )
+    ],
+    enhancements=[],
+)
+
+paper_a = convert_ref_to_paper(ref_a)
+paper_b = convert_ref_to_paper(ref_b)
+
+deduper = Deduper(reference=paper_a, candidates=[paper_b])
+probability = deduper.dedupe_weighted(paper_a, paper_b)
+
+print(probability)
+```
+
+### Using citations imported from csv
+
+```python
+from destiny_deduper.algorithm.import_references import (
+    CsvLoadConfig,
+    load_reference_csv,
+)
+from destiny_deduper.dedupe import Deduper
+
+papers = load_reference_csv(
+    "records.csv",
+    CsvLoadConfig(include_record_id=True),
+)
+
+paper_a = papers[0]
+paper_b = papers[1]
+
+deduper = Deduper(reference=paper_a, candidates=[paper_b])
+result = deduper.score_pair(paper_a, paper_b)
+
+print(result.probability)
+print(result.label)
+```
+
+## How we got here
+
+Please see all the code in `destiny_deduper/algorithm/`, as well as `notebooks` for more info on the underlying research and study that went into developing the algorithm, thresholds and weights underlying `destiny-deduper`. You can also read `deduplication_workflows.md` for more info.
+
 ## Contributing
 
 If you want to contribute to this project -- awesome, everyone's welcome.
@@ -54,3 +126,5 @@ All commits must use [**conventional commits**](conventionalcommits.org). The pr
 | `feat:` | `feat: add login page` | minor: `0.1.0 -> 0.2.0` |
 | `feat!:` or `BREAKING CHANGE:` footer | `feat!: remove legacy api` | major: `0.1.0 -> 1.0.0` |
 | `chore:`, `docs:`, `ci:`, `test:` | `chore: update deps` | no bump |
+
+we will udpate some stuff here!

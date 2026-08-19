@@ -1,11 +1,11 @@
-"""Tests for destiny_dedupe.config module-level path resolution and copy logic."""
+"""Tests for destiny_deduper.config module-level path resolution and copy logic."""
 
 import importlib
 from pathlib import Path
 
 import pytest
 
-from destiny_dedupe import config
+from destiny_deduper import config
 
 
 @pytest.fixture(autouse=True)

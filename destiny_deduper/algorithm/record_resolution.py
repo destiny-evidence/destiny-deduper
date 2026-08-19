@@ -9,7 +9,7 @@ from typing import Generic, Literal, TypeVar, cast
 
 import pandas as pd
 
-from destiny_dedupe.data_models import PaperWithId
+from destiny_deduper.data_models import PaperWithId
 
 RetentionStrategy = Literal[
     "min_recordid",

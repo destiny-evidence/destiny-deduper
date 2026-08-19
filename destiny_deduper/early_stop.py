@@ -11,13 +11,13 @@ from pydantic import BaseModel, ConfigDict
 from rapidfuzz import fuzz
 
 if TYPE_CHECKING:
-    from destiny_dedupe.data_models import Paper
-    from destiny_dedupe.dedupe import Deduper
+    from destiny_deduper.data_models import Paper
+    from destiny_deduper.dedupe import Deduper
 
-from destiny_dedupe.config import get_settings
-from destiny_dedupe.normalisers import normalise_doi, normalise_part_number
-from destiny_dedupe.regexes import PART_NUMBER_RE
-from destiny_dedupe.utils import clean_title_for_partial_ratio
+from destiny_deduper.config import get_settings
+from destiny_deduper.normalisers import normalise_doi, normalise_part_number
+from destiny_deduper.regexes import PART_NUMBER_RE
+from destiny_deduper.utils import clean_title_for_partial_ratio
 
 settings = get_settings()
 

@@ -4,7 +4,7 @@ import re
 
 from destiny_sdk.enhancements import Authorship
 
-from destiny_dedupe.utils import roman_to_int
+from destiny_deduper.utils import roman_to_int
 
 PAGE_PARTS = 2
 

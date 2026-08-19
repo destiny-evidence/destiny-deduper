@@ -9,7 +9,7 @@ from importlib.metadata import version as _pkg_version
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from destiny_dedupe.config import get_settings
+from destiny_deduper.config import get_settings
 
 
 class EarlyStopReason(StrEnum):
@@ -104,9 +104,9 @@ def get_library_info() -> LibraryInfo:
     settings = get_settings()
 
     try:
-        pkg_version = _pkg_version("deduplication-toolkit")
+        pkg_version = _pkg_version("destiny-deduper")
     except PackageNotFoundError as e:
-        msg = "Package 'deduplication-toolkit' is not installed."
+        msg = "Package 'destiny-deduper' is not installed."
         raise PackageNotFoundError(msg) from e
 
     scoring_config: dict[str, object] = {

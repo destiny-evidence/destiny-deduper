@@ -12,9 +12,9 @@ from destiny_sdk.identifiers import DOIIdentifier, ExternalIdentifierType
 from loguru import logger
 from pydantic import BaseModel, Field, ValidationError
 
-from destiny_dedupe.config import CsvImportSettings, get_settings
-from destiny_dedupe.data_models import GoldStandardPaper, Paper, PaperWithId
-from destiny_dedupe.normalisers import normalise_doi
+from destiny_deduper.config import CsvImportSettings, get_settings
+from destiny_deduper.data_models import GoldStandardPaper, Paper, PaperWithId
+from destiny_deduper.normalisers import normalise_doi
 
 settings = get_settings()
 csv_import_settings: CsvImportSettings = settings.csv_import

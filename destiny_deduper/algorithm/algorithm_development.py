@@ -15,18 +15,18 @@ import pandas as pd
 from loguru import logger
 from tqdm import tqdm
 
-from destiny_dedupe.algorithm.candidate_selection import (
+from destiny_deduper.algorithm.candidate_selection import (
     _MIN_BLOCK_SIZE,
     BLOCK_RULES,
     normalise_block_value,
 )
-from destiny_dedupe.algorithm.record_cache import build_record_cache
-from destiny_dedupe.algorithm.record_resolution import (
+from destiny_deduper.algorithm.record_cache import build_record_cache
+from destiny_deduper.algorithm.record_resolution import (
     record_level_metrics_for_threshold,
 )
-from destiny_dedupe.data_models import GoldStandardPaper, Paper
-from destiny_dedupe.dedupe import Deduper
-from destiny_dedupe.early_stop import EARLY_STOP_RULES, ComparisonContext
+from destiny_deduper.data_models import GoldStandardPaper, Paper
+from destiny_deduper.dedupe import Deduper
+from destiny_deduper.early_stop import EARLY_STOP_RULES, ComparisonContext
 
 SEED = 1234
 DEDUPE_FIELDS = [
