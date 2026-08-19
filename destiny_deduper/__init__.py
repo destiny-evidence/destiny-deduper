@@ -1,6 +1,6 @@
 """Deduplication toolkit public API."""
 
-from destiny_dedupe.pair_score_result import (
+from destiny_deduper.pair_score_result import (
     EarlyStopReason,
     FieldResult,
     FieldStatus,

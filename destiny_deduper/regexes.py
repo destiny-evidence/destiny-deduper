@@ -2,7 +2,7 @@
 
 import re
 
-from destiny_dedupe.config import get_settings
+from destiny_deduper.config import get_settings
 
 settings = get_settings()
 

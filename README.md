@@ -1,10 +1,10 @@
-# deduplication-toolkit
+# destiny-deduper
 
-A suite of tools for deduplicating DESTINY `References`
+A suite of tools for deduplicating citatations for publications.
 
 ## tl, dr
 
-Often, we want to ensure that a DESTINY `Reference` (or its sub-types) is not a duplicate of one that already exists in the DESTINY repository, or, more in some other bag of potential, pre-selected duplicate candidates. Hence the goal of this `deduplication-toolkit` is to provide a set of portable, customisable solutions for quantifying the likelihood that a given `Reference` is a duplicate of another.
+In large repositories of published works, we want to ensure that a given citation is not a duplicate of another. Hence the goal of this `destiny-deduper` is to provide a set of portable, customisable solutions for quantifying the likelihood that a given citation is a duplicate of another.
 
 ## Setup
 

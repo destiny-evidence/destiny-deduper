@@ -7,8 +7,8 @@ from itertools import combinations
 
 import pandas as pd
 
-from destiny_dedupe.data_models import Paper
-from destiny_dedupe.normalisers import (
+from destiny_deduper.data_models import Paper
+from destiny_deduper.normalisers import (
     normalise_doi,
     normalise_pages,
     strip_doi_punctuation,

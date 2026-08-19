@@ -14,21 +14,21 @@ import pandas as pd
 from sklearn.metrics import average_precision_score, confusion_matrix, roc_auc_score
 from tqdm.auto import tqdm
 
-from destiny_dedupe.algorithm.candidate_selection import (
+from destiny_deduper.algorithm.candidate_selection import (
     BLOCK_RULES,
     build_blocked_pairs,
 )
-from destiny_dedupe.algorithm.import_references import (
+from destiny_deduper.algorithm.import_references import (
     DEFAULT_COLUMNS,
     CsvLoadConfig,
     load_reference_csv,
 )
-from destiny_dedupe.algorithm.record_resolution import (
+from destiny_deduper.algorithm.record_resolution import (
     record_level_metrics_for_threshold,
 )
-from destiny_dedupe.data_models import GoldStandardPaper
-from destiny_dedupe.dedupe import INTERCEPT, Deduper, ScorePairConfig
-from destiny_dedupe.dedupe import WEIGHTS as MODEL_WEIGHTS
+from destiny_deduper.data_models import GoldStandardPaper
+from destiny_deduper.dedupe import INTERCEPT, Deduper, ScorePairConfig
+from destiny_deduper.dedupe import WEIGHTS as MODEL_WEIGHTS
 
 repo_root = Path.cwd()
 if not (repo_root / "app").exists():

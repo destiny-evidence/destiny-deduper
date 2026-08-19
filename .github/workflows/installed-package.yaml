@@ -42,8 +42,8 @@ jobs:
         # would put the current directory there instead.
         run: |
           cat > /tmp/probe.py <<'EOF'
-          import destiny_dedupe.config as config
-          from destiny_dedupe.dedupe import Deduper
+          import destiny_deduper.config as config
+          from destiny_deduper.dedupe import Deduper
 
           settings = config.get_settings()
           assert settings.weights.intercept is not None, "config did not load"

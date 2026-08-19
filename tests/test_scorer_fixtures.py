@@ -5,9 +5,9 @@ One case per pair in tests/fixtures/pairs.csv. See that directory's README for
 what each pair targets and how the expected values were produced.
 """
 
-from destiny_dedupe.dedupe import Deduper
-from destiny_dedupe.early_stop import EARLY_STOP_RULES
-from destiny_dedupe.pair_score_result import EarlyStopReason
+from destiny_deduper.dedupe import Deduper
+from destiny_deduper.early_stop import EARLY_STOP_RULES
+from destiny_deduper.pair_score_result import EarlyStopReason
 
 # Neither is reachable: the first is a subset of doi_and_pages_mismatch, which
 # is checked before it, and no rule produces the second at all.

@@ -633,7 +633,7 @@ wheels = [
 ]
 
 [[package]]
-name = "deduplication-toolkit"
+name = "destiny-deduper"
 version = "0.2.2"
 source = { editable = "." }
 dependencies = [
