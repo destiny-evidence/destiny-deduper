@@ -19,6 +19,8 @@ USER_CONFIG_FILE_PATH = (
 )  # canonical version, but
 # won't work on windows just yet.
 
+# NOTE: deleting user config will regenerate on next run.
+# this is required if there are any breaking changes in the the config/settings.
 if not USER_CONFIG_FILE_PATH.is_file():
     from sys import platform
 
@@ -32,8 +34,13 @@ if not USER_CONFIG_FILE_PATH.is_file():
         logger.debug(
             "copying system .config.yaml to user config yaml (~/.config/destiny_dedupe/.config.yaml) for editability."
         )
-        USER_CONFIG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        copyfile(CONFIG_FILE_PATH, USER_CONFIG_FILE_PATH)
+        try:
+            USER_CONFIG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            copyfile(CONFIG_FILE_PATH, USER_CONFIG_FILE_PATH)
+        except PermissionError:
+            logger.warning(
+                f"{USER_CONFIG_FILE_PATH} isn't writeable. defaulting to package config."
+            )
 
 
 class TitleThresholds(BaseModel):
