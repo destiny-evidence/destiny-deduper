@@ -4,7 +4,6 @@ from enum import StrEnum, auto
 from math import exp
 from typing import Literal
 
-from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 from rapidfuzz.distance import JaroWinkler as _JaroWinkler
 from rapidfuzz.distance import Levenshtein as _Levenshtein
@@ -16,6 +15,7 @@ from destiny_deduper.early_stop import (
     ComparisonContext,
     EarlyStopRule,
 )
+from destiny_deduper.logger import logger
 from destiny_deduper.normalisers import (
     normalise_doi,
     normalise_isbn,
