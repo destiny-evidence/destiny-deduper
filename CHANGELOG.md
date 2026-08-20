@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.2.5 (2026-08-20)
+
+### Bug Fixes
+
+- Publish to TestPyPI without needing the repo checked out
+  ([`6772ddf`](https://github.com/destiny-evidence/destiny-deduper/commit/6772ddf8ba9ac035bf75c806a8eff9ab40bd85d1))
+
+
 ## v0.2.4 (2026-08-19)
 
 ### Bug Fixes
