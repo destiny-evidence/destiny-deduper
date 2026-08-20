@@ -6,9 +6,25 @@ A suite of tools for deduplicating citatations for publications.
 
 In large repositories of published works, we want to ensure that a given citation is not a duplicate of another. Hence the goal of this `destiny-deduper` is to provide a set of portable, customisable solutions for quantifying the likelihood that a given citation is a duplicate of another.
 
-## Setup
+## Installing `destiny-deduper`
 
-### Requirements
+If you just want to use `destiny-deduper`, you can install using `pip`:
+
+```sh
+pip install destiny-deduper
+```
+
+`uv` is often preferred over vanilla `pip`:
+
+```sh
+uv add destiny-deduper
+```
+
+### Developer install
+
+If you want to contribute to `destiny-deduper`, follow the following steps:
+
+1. Install `uv`
 
 [uv](https://docs.astral.sh/uv) is used for dependency management and managing virtual environments. You can install uv either using pipx or the uv installer script:
 
@@ -16,7 +32,7 @@ In large repositories of published works, we want to ensure that a given citatio
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### Installing Dependencies
+1. Install project & dependencies
 
 Once uv is installed, install dependencies:
 
@@ -24,7 +40,7 @@ Once uv is installed, install dependencies:
 uv sync
 ```
 
-### Activate your environment
+1. Optional - activate your environment
 
 ```sh
 source .venv/bin/activate
@@ -37,6 +53,8 @@ source .venv/bin/activate
 ### Using destiny `Reference`s
 
 ```python
+from uuid import uuid4
+
 from destiny_sdk.identifiers import DOIIdentifier, ExternalIdentifierType
 from destiny_sdk.references import Reference
 
@@ -44,7 +62,7 @@ from destiny_deduper.data_models import convert_ref_to_paper
 from destiny_deduper.dedupe import Deduper
 
 ref_a = Reference(
-    id="ref-1",
+    id=str(uuid4()),
     identifiers=[
         DOIIdentifier(
             identifier="10.1000/xyz123",
@@ -55,7 +73,7 @@ ref_a = Reference(
 )
 
 ref_b = Reference(
-    id="ref-2",
+    id=str(uuid4()),
     identifiers=[
         DOIIdentifier(
             identifier="10.1000/xyz123",
@@ -110,7 +128,6 @@ Please see the [contributing guidelines](CONTRIBUTING.md) for details on how bes
 A few important steps when contributing:
 
 ```sh
-pre-commit install
 uv run pre-commit install --hook-type commit-msg
 ```
 
@@ -121,7 +138,7 @@ This will force you to use [conventional commits](https://www.conventionalcommit
 All commits must use [**conventional commits**](conventionalcommits.org). The pre-commit hook will reject any commit that doesn't.
 
 | prefix | example | version effect |
-|---|---|---|
+| --- | --- | --- |
 | `fix:` | `fix: handle null input` | patch: `0.1.0 -> 0.1.1` |
 | `feat:` | `feat: add login page` | minor: `0.1.0 -> 0.2.0` |
 | `feat!:` or `BREAKING CHANGE:` footer | `feat!: remove legacy api` | major: `0.1.0 -> 1.0.0` |
