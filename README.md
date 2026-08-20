@@ -7,17 +7,21 @@ A suite of tools for deduplicating citatations for publications.
 In large repositories of published works, we want to ensure that a given citation is not a duplicate of another. Hence the goal of this `destiny-deduper` is to provide a set of portable, customisable solutions for quantifying the likelihood that a given citation is a duplicate of another.
 
 ## Installing `destiny-deduper`
+
 If you just want to use `destiny-deduper`, you can install using `pip`:
+
 ```sh
 pip install destiny-deduper
 ```
 
 `uv` is often preferred over vanilla `pip`:
+
 ```sh
 uv add destiny-deduper
 ```
 
 ### Developer install
+
 If you want to contribute to `destiny-deduper`, follow the following steps:
 
 1. Install `uv`
@@ -27,7 +31,7 @@ If you want to contribute to `destiny-deduper`, follow the following steps:
 ```sh
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-2. Install project & dependencies
+1. Install project & dependencies
 
 Once uv is installed, install dependencies:
 
@@ -35,7 +39,7 @@ Once uv is installed, install dependencies:
 uv sync
 ```
 
-3. Optional - activate your environment
+1. Optional - activate your environment
 
 ```sh
 source .venv/bin/activate
@@ -133,7 +137,7 @@ This will force you to use [conventional commits](https://www.conventionalcommit
 All commits must use [**conventional commits**](conventionalcommits.org). The pre-commit hook will reject any commit that doesn't.
 
 | prefix | example | version effect |
-|---|---|---|
+| --- | --- | --- |
 | `fix:` | `fix: handle null input` | patch: `0.1.0 -> 0.1.1` |
 | `feat:` | `feat: add login page` | minor: `0.1.0 -> 0.2.0` |
 | `feat!:` or `BREAKING CHANGE:` footer | `feat!: remove legacy api` | major: `0.1.0 -> 1.0.0` |
