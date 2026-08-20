@@ -44,7 +44,7 @@ maintainers = [
 name = "destiny-deduper"
 readme = "README.md"
 requires-python = ">=3.12.11"
-version = "0.2.5"
+version = "0.2.6"
 
 [project.urls]
 Repository = "https://github.com/destiny-evidence/destiny-deduper"

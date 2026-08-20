@@ -2,6 +2,39 @@
 
 <!-- version list -->
 
+## v0.2.6 (2026-08-20)
+
+### Bug Fixes
+
+- Fixing typo in user config file path
+  ([`d91131f`](https://github.com/destiny-evidence/destiny-deduper/commit/d91131f27c013169d18ec2e1f68b95fe48494906))
+
+- Setting authors and maintainers for pypi
+  ([`14c3259`](https://github.com/destiny-evidence/destiny-deduper/commit/14c3259fb7c6c94487d14afa47dc2417089f6042))
+
+### Chores
+
+- Removing file log, setting stderr log to info
+  ([`343452b`](https://github.com/destiny-evidence/destiny-deduper/commit/343452bb8c9e1bae0d549cf37f0755bc7fd03dcc))
+
+### Documentation
+
+- Finally fixing markdownlint?
+  ([`454318c`](https://github.com/destiny-evidence/destiny-deduper/commit/454318c479c9702ee0826b997adb58282346c3d0))
+
+- Fixing error in example code
+  ([`8d8bf23`](https://github.com/destiny-evidence/destiny-deduper/commit/8d8bf2399706e53de92565726b2bbb545fcc41bd))
+
+- Fixing markdownlint errors
+  ([`27b2a89`](https://github.com/destiny-evidence/destiny-deduper/commit/27b2a8980f41e9f237226b3b2805ccd406e48919))
+
+- Removing duplicate pre-commit install statement
+  ([`150a7e3`](https://github.com/destiny-evidence/destiny-deduper/commit/150a7e32f5a0b8a80ed6ddf34cb90dd2ae239c7d))
+
+- Updating install instructions to pip
+  ([`38f7e2f`](https://github.com/destiny-evidence/destiny-deduper/commit/38f7e2fb8a3d9f2471002edb0a597705b51ed056))
+
+
 ## v0.2.5 (2026-08-20)
 
 ### Bug Fixes
