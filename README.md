@@ -6,17 +6,28 @@ A suite of tools for deduplicating citatations for publications.
 
 In large repositories of published works, we want to ensure that a given citation is not a duplicate of another. Hence the goal of this `destiny-deduper` is to provide a set of portable, customisable solutions for quantifying the likelihood that a given citation is a duplicate of another.
 
-## Setup
+## Installing `destiny-deduper`
+If you just want to use `destiny-deduper`, you can install using `pip`:
+```sh
+pip install destiny-deduper
+```
 
-### Requirements
+`uv` is often preferred over vanilla `pip`:
+```sh
+uv add destiny-deduper
+```
+
+### Developer install
+If you want to contribute to `destiny-deduper`, follow the following steps:
+
+1. Install `uv`
 
 [uv](https://docs.astral.sh/uv) is used for dependency management and managing virtual environments. You can install uv either using pipx or the uv installer script:
 
 ```sh
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-
-### Installing Dependencies
+2. Install project & dependencies
 
 Once uv is installed, install dependencies:
 
@@ -24,7 +35,7 @@ Once uv is installed, install dependencies:
 uv sync
 ```
 
-### Activate your environment
+3. Optional - activate your environment
 
 ```sh
 source .venv/bin/activate
