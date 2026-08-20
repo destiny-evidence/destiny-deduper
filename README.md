@@ -37,6 +37,8 @@ source .venv/bin/activate
 ### Using destiny `Reference`s
 
 ```python
+from uuid import uuid4
+
 from destiny_sdk.identifiers import DOIIdentifier, ExternalIdentifierType
 from destiny_sdk.references import Reference
 
@@ -44,7 +46,7 @@ from destiny_deduper.data_models import convert_ref_to_paper
 from destiny_deduper.dedupe import Deduper
 
 ref_a = Reference(
-    id="ref-1",
+    id=str(uuid4()),
     identifiers=[
         DOIIdentifier(
             identifier="10.1000/xyz123",
@@ -55,7 +57,7 @@ ref_a = Reference(
 )
 
 ref_b = Reference(
-    id="ref-2",
+    id=str(uuid4()),
     identifiers=[
         DOIIdentifier(
             identifier="10.1000/xyz123",
