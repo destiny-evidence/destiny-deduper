@@ -15,7 +15,7 @@ from pydantic_settings import (
 PACKAGE_ROOT = Path(__file__).resolve().parent
 CONFIG_FILE_PATH = PACKAGE_ROOT / ".config.yaml"  # moved to inside package
 USER_CONFIG_FILE_PATH = (
-    Path("~/.config/destiny-dedupe/").expanduser() / ".config.yaml"
+    Path("~/.config/destiny-deduper/").expanduser() / ".config.yaml"
 )  # canonical version, but
 # won't work on windows just yet.
 

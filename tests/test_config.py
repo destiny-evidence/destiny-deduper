@@ -32,7 +32,7 @@ def test_user_config_copied_when_missing(monkeypatch, tmp_path):
 
 
 def test_user_config_not_overwritten_when_present(monkeypatch, tmp_path):
-    user_dir = tmp_path / ".config" / "destiny-dedupe"
+    user_dir = tmp_path / ".config" / "destiny-deduper"
     user_dir.mkdir(parents=True)
     custom_config = user_dir / ".config.yaml"
     custom_config.write_text("custom: true\n")

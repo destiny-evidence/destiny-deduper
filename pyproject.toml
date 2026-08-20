@@ -23,8 +23,8 @@ dev = [
 
 [project]
 authors = [
-    {email = "k.hair@ucl.ac.uk", name = "Kaitlyn Hair"},
-    {email = "n.loynes@ucl.ac.uk", name = "Nik Loynes"},
+    {name = "Kaitlyn Hair"},
+    {name = "Nik Loynes"},
 ]
 dependencies = [
     "destiny-sdk>=0.9.0",
@@ -37,10 +37,17 @@ dependencies = [
     "rapidfuzz>=3.14.5",
 ]
 description = "A suite of tools for deduplicating DESTINY Works"
+maintainers = [
+    {name = "Kaitlyn Hair"},
+    {name = "Nik Loynes"},
+]
 name = "destiny-deduper"
 readme = "README.md"
 requires-python = ">=3.12.11"
 version = "0.2.5"
+
+[project.urls]
+Repository = "https://github.com/destiny-evidence/destiny-deduper"
 
 [tool.pytest.ini_options]
 addopts = ["--color=yes", "--import-mode=importlib", "--verbose"]
