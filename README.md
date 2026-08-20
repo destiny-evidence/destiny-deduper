@@ -112,7 +112,6 @@ Please see the [contributing guidelines](CONTRIBUTING.md) for details on how bes
 A few important steps when contributing:
 
 ```sh
-pre-commit install
 uv run pre-commit install --hook-type commit-msg
 ```
 
