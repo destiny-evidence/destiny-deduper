@@ -63,7 +63,10 @@ jobs:
           version: "0.12.0"
 
       - name: Publish to TestPyPI
-        run: uv publish --index testpypi
+        run: >
+          uv publish
+          --publish-url https://test.pypi.org/legacy/
+          --check-url https://test.pypi.org/simple/
 
   publish-pypi:
     needs: publish-testpypi
