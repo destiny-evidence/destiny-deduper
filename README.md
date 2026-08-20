@@ -31,6 +31,7 @@ If you want to contribute to `destiny-deduper`, follow the following steps:
 ```sh
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+
 1. Install project & dependencies
 
 Once uv is installed, install dependencies:
