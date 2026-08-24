@@ -3,7 +3,10 @@ from pathlib import Path
 
 
 def _dependency_names(dependencies: list[str]) -> set[str]:
-    return {dependency.split(";", 1)[0].split("[", 1)[0].split(">=", 1)[0] for dependency in dependencies}
+    return {
+        dependency.split(";", 1)[0].split("[", 1)[0].split(">=", 1)[0]
+        for dependency in dependencies
+    }
 
 
 def test_release_tooling_is_not_a_runtime_dependency() -> None:
