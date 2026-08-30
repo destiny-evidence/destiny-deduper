@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v0.2.7 (2026-08-30)
+
+### Bug Fixes
+
+- Move semantic-release to dev dependencies
+  ([`c18ea70`](https://github.com/destiny-evidence/destiny-deduper/commit/c18ea7058567f37a4d278b2b20134910c9b4cff3))
+
+- Satisfy packaging metadata lint
+  ([`a63a711`](https://github.com/destiny-evidence/destiny-deduper/commit/a63a71103317018f2304eeec66c5286d988be935))
+
+
 ## v0.2.6 (2026-08-20)
 
 ### Bug Fixes
