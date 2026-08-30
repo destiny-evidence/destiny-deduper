@@ -664,7 +664,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-extra-types" },
     { name = "pydantic-settings", extra = ["yaml"] },
-    { name = "python-semantic-release" },
     { name = "rapidfuzz" },
 ]
 
@@ -683,6 +682,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-env" },
     { name = "pytest-mock" },
+    { name = "python-semantic-release" },
     { name = "ruff" },
     { name = "ty" },
 ]
@@ -695,7 +695,6 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pydantic-extra-types", specifier = ">=2.10.5" },
     { name = "pydantic-settings", extras = ["yaml"], specifier = ">=2.10.1" },
-    { name = "python-semantic-release", specifier = ">=10.6.1" },
     { name = "rapidfuzz", specifier = ">=3.14.5" },
 ]
 
@@ -714,6 +713,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=6.2.1" },
     { name = "pytest-env", specifier = ">=1.1.5,<2.0.0" },
     { name = "pytest-mock", specifier = ">=3.14.1" },
+    { name = "python-semantic-release", specifier = ">=10.6.1" },
     { name = "ruff", specifier = ">=0.12.0" },
     { name = "ty", specifier = ">=0.0.69" },
 ]
